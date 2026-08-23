@@ -1,0 +1,71 @@
+create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
+
+create type public.plan_type as enum ('khata','pro','teams');
+create type public.billing_cycle_type as enum ('monthly','yearly');
+create type public.team_role as enum ('owner','member');
+create type public.team_status as enum ('active','pending');
+create type public.account_provider as enum ('gmail','payoneer','wise','upwork','fiverr','jazzcash','easypaisa','bank_sms','whatsapp');
+create type public.connection_status as enum ('connected','disconnected','error');
+create type public.transaction_direction as enum ('credit','debit');
+create type public.transaction_confidence as enum ('high','med','low','learned');
+create type public.transaction_status as enum ('ok','review');
+create type public.category_kind as enum ('income','expense');
+create type public.invoice_status as enum ('paid','pending','overdue');
+create type public.approval_kind as enum ('bill','payout');
+create type public.approval_status as enum ('pending','approved','declined');
+create type public.notification_type as enum ('pay','rem','alert','team');
+create type public.audit_actor_type as enum ('staff','system');
+
+create table public.businesses (id uuid primary key default gen_random_uuid(), owner_user_id uuid not null references auth.users(id), name text not null, currency text not null default 'PKR' check (currency ~ '^[A-Z]{3}$'), plan public.plan_type not null default 'khata', billing_cycle public.billing_cycle_type not null default 'monthly', created_at timestamptz not null default now());
+create table public.team_members (business_id uuid not null references public.businesses(id) on delete cascade, user_id uuid references auth.users(id) on delete cascade, role public.team_role not null, status public.team_status not null default 'pending', invited_email text, joined_at timestamptz, check ((status='active' and user_id is not null and joined_at is not null) or (status='pending' and invited_email is not null)), check (role <> 'owner' or status='active'));
+create unique index unique_business_member on public.team_members(business_id,user_id) where user_id is not null;
+create unique index one_owner_per_business on public.team_members(business_id) where role='owner';
+create unique index pending_invite_per_business on public.team_members(business_id,lower(invited_email)) where status='pending';
+create table public.connected_accounts (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, provider public.account_provider not null, status public.connection_status not null default 'disconnected', last_synced_at timestamptz, encrypted_credentials bytea, metadata jsonb not null default '{}'::jsonb, unique(business_id,provider));
+create table public.categories (id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id) on delete cascade, name text not null, kind public.category_kind not null);
+create unique index unique_global_category on public.categories(lower(name),kind) where business_id is null;
+create unique index unique_business_category on public.categories(business_id,lower(name),kind) where business_id is not null;
+create table public.transactions (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, user_id uuid not null references auth.users(id), occurred_at timestamptz not null, description text not null, amount_minor bigint not null check(amount_minor>=0), currency text not null check(currency ~ '^[A-Z]{3}$'), direction public.transaction_direction not null, source_provider public.account_provider not null, raw_source_id text not null, category_id uuid references public.categories(id) on delete set null, confidence public.transaction_confidence not null, status public.transaction_status not null default 'ok', created_at timestamptz not null default now(), unique(business_id,source_provider,raw_source_id));
+create table public.merchant_cache (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, merchant_pattern text not null, category_id uuid not null references public.categories(id) on delete cascade, match_count integer not null default 0 check(match_count>=0), last_matched_at timestamptz, unique(business_id,merchant_pattern));
+create index merchant_cache_trgm on public.merchant_cache using gin(merchant_pattern gin_trgm_ops);
+create table public.clients (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, name text not null, contact_email text, contact_whatsapp text, source text);
+create table public.invoices (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, client_id uuid not null references public.clients(id) on delete cascade, invoice_number text not null, amount_minor bigint not null check(amount_minor>=0), currency text not null check(currency ~ '^[A-Z]{3}$'), status public.invoice_status not null default 'pending', due_date date not null, unique(business_id,invoice_number));
+create table public.approvals (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, kind public.approval_kind not null, title text not null, amount_minor bigint not null check(amount_minor>=0), due_date date, status public.approval_status not null default 'pending', requested_by uuid not null references auth.users(id));
+create table public.notifications (id uuid primary key default gen_random_uuid(), business_id uuid not null references public.businesses(id) on delete cascade, user_id uuid references auth.users(id), type public.notification_type not null, title text not null, body text not null, read boolean not null default false, created_at timestamptz not null default now());
+create table public.subscriptions (business_id uuid primary key references public.businesses(id) on delete cascade, stripe_customer_id text, stripe_subscription_id text, status text not null, current_period_end timestamptz);
+create table public.staff_users (user_id uuid primary key references auth.users(id) on delete cascade, created_at timestamptz not null default now());
+create table public.coupons (id uuid primary key default gen_random_uuid(), code text not null unique, discount_description text not null, redemption_limit integer check(redemption_limit>=0), redemption_count integer not null default 0 check(redemption_count>=0), expires_at timestamptz);
+create table public.feature_flags (key text primary key, enabled boolean not null default false, rollout_plan text[] not null default '{}');
+create table public.audit_log (id uuid primary key default gen_random_uuid(), actor_type public.audit_actor_type not null, actor_name text not null, action text not null, target text not null, created_at timestamptz not null default now());
+
+create function public.is_active_member(bid uuid, uid uuid default auth.uid()) returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from team_members where business_id=bid and user_id=uid and status='active') $$;
+create function public.is_business_owner(bid uuid, uid uuid default auth.uid()) returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from team_members where business_id=bid and user_id=uid and status='active' and role='owner') $$;
+create function public.is_staff(uid uuid default auth.uid()) returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from staff_users where user_id=uid) $$;
+revoke all on function public.is_active_member(uuid,uuid),public.is_business_owner(uuid,uuid),public.is_staff(uuid) from public;
+grant execute on function public.is_active_member(uuid,uuid),public.is_business_owner(uuid,uuid),public.is_staff(uuid) to authenticated;
+
+alter table public.businesses enable row level security; alter table public.team_members enable row level security; alter table public.connected_accounts enable row level security; alter table public.transactions enable row level security; alter table public.categories enable row level security; alter table public.merchant_cache enable row level security; alter table public.clients enable row level security; alter table public.invoices enable row level security; alter table public.approvals enable row level security; alter table public.notifications enable row level security; alter table public.subscriptions enable row level security; alter table public.staff_users enable row level security; alter table public.coupons enable row level security; alter table public.feature_flags enable row level security; alter table public.audit_log enable row level security;
+
+create policy businesses_member_all on public.businesses for all to authenticated using(public.is_active_member(id)) with check(public.is_active_member(id));
+create policy team_members_member_read on public.team_members for select to authenticated using(public.is_active_member(business_id));
+create policy team_members_owner_write on public.team_members for all to authenticated using(public.is_business_owner(business_id)) with check(public.is_business_owner(business_id));
+create policy connected_accounts_member_all on public.connected_accounts for all to authenticated using(public.is_active_member(business_id)) with check(public.is_active_member(business_id));
+create policy transactions_private_read on public.transactions for select to authenticated using(public.is_active_member(business_id) and (user_id=auth.uid() or public.is_business_owner(business_id)));
+create policy transactions_private_write on public.transactions for all to authenticated using(public.is_active_member(business_id) and user_id=auth.uid()) with check(public.is_active_member(business_id) and user_id=auth.uid());
+create policy categories_read on public.categories for select to authenticated using(business_id is null or public.is_active_member(business_id));
+create policy categories_business_write on public.categories for all to authenticated using(business_id is not null and public.is_active_member(business_id)) with check(business_id is not null and public.is_active_member(business_id));
+create policy merchant_cache_member_all on public.merchant_cache for all to authenticated using(public.is_active_member(business_id)) with check(public.is_active_member(business_id));
+create policy clients_member_all on public.clients for all to authenticated using(public.is_active_member(business_id)) with check(public.is_active_member(business_id));
+create policy invoices_member_all on public.invoices for all to authenticated using(public.is_active_member(business_id)) with check(public.is_active_member(business_id));
+create policy approvals_member_all on public.approvals for all to authenticated using(public.is_active_member(business_id)) with check(public.is_active_member(business_id));
+create policy notifications_read on public.notifications for select to authenticated using(public.is_active_member(business_id) and (user_id is null or user_id=auth.uid()));
+create policy notifications_write on public.notifications for all to authenticated using(public.is_active_member(business_id) and (user_id is null or user_id=auth.uid())) with check(public.is_active_member(business_id) and (user_id is null or user_id=auth.uid()));
+create policy subscriptions_member_all on public.subscriptions for all to authenticated using(public.is_active_member(business_id)) with check(public.is_active_member(business_id));
+create policy staff_users_staff_read on public.staff_users for select to authenticated using(public.is_staff());
+create policy coupons_staff_all on public.coupons for all to authenticated using(public.is_staff()) with check(public.is_staff());
+create policy flags_staff_all on public.feature_flags for all to authenticated using(public.is_staff()) with check(public.is_staff());
+create policy audit_staff_read on public.audit_log for select to authenticated using(public.is_staff());
+
+create function public.create_business(business_name text, business_currency text default 'PKR', business_plan public.plan_type default 'khata', cycle public.billing_cycle_type default 'monthly') returns uuid language plpgsql security definer set search_path=public as $$ declare bid uuid; begin if auth.uid() is null then raise exception 'authentication required'; end if; insert into businesses(owner_user_id,name,currency,plan,billing_cycle) values(auth.uid(),business_name,business_currency,business_plan,cycle) returning id into bid; insert into team_members(business_id,user_id,role,status,joined_at) values(bid,auth.uid(),'owner','active',now()); return bid; end $$;
+grant execute on function public.create_business(text,text,public.plan_type,public.billing_cycle_type) to authenticated;

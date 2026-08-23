@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munshi — Your ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EAE3D3; --paper-alt:#F3EEE1; --paper-line:#C9C2AC;
+  --ink:#1A2E22; --ink-soft:#4A5148;
+  --forest:#14442F; --forest-dark:#0D2E1F;
+  --red:#9C2B1B; --red-soft:#C2543F;
+  --brass:#A97C2F; --muted:#7A7361;
+  --serif:'IBM Plex Serif', Georgia, serif;
+  --sans:'IBM Plex Sans', -apple-system, sans-serif;
+  --mono:'IBM Plex Mono', monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--paper); color:var(--ink); font-family:var(--sans); line-height:1.5;}
+h1,h2,h3{font-family:var(--serif); font-weight:600; color:var(--forest-dark); letter-spacing:-0.01em;}
+.mono{font-family:var(--mono);}
+a{color:inherit;}
+button{font-family:inherit;}
+::selection{background:var(--red); color:var(--paper);}
+
+/* ===== APP SHELL ===== */
+.shell{display:grid; grid-template-columns:230px 1fr; grid-template-rows:auto 1fr; min-height:100vh;}
+@media (max-width:900px){ .shell{grid-template-columns:64px 1fr;} }
+
+/* Sidebar */
+.side{grid-row:1 / -1; background:var(--forest-dark); color:var(--paper); display:flex; flex-direction:column; position:sticky; top:0; height:100vh;}
+.side-brand{padding:18px 20px; font-family:var(--serif); font-size:19px; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; gap:10px;}
+.side-brand img{width:30px; height:31px; border-radius:6px; flex-shrink:0; object-fit:cover;}
+.side-brand .dot{color:var(--red-soft);}
+@media (max-width:900px){ .side-brand span:not(.dot){display:none;} }
+.side-nav{flex:1; padding:14px 10px; overflow-y:auto;}
+.side-group-label{font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:#7E9587; padding:14px 12px 6px;}
+@media (max-width:900px){ .side-group-label{display:none;} }
+.side-link{
+  display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:2px;
+  color:#CBDDD2; text-decoration:none; font-size:13.5px; font-family:var(--sans); cursor:pointer;
+  border-left:2px solid transparent; margin-bottom:2px; background:none; width:100%; text-align:left; border-top:none; border-right:none; border-bottom:none;
+}
+.side-link .ic{font-family:var(--mono); font-size:13px; width:18px; text-align:center; flex-shrink:0; color:var(--brass);}
+.side-link span.lbl{white-space:nowrap;}
+@media (max-width:900px){ .side-link span.lbl{display:none;} .side-link{justify-content:center;} }
+.side-link:hover{background:rgba(255,255,255,0.06); color:var(--paper);}
+.side-link.active{background:rgba(255,255,255,0.09); color:var(--paper); border-left-color:var(--brass); font-weight:600;}
+.side-foot{padding:14px 18px; border-top:1px solid rgba(255,255,255,0.1); font-family:var(--mono); font-size:11px; color:#8AA294;}
+@media (max-width:900px){ .side-foot{display:none;} }
+
+/* Topbar */
+.top{
+  position:sticky; top:0; z-index:20; background:var(--paper);
+  border-bottom:1px solid var(--paper-line); grid-column:2;
+}
+.top-inner{display:flex; align-items:center; justify-content:space-between; padding:14px 28px;}
+.top-title h1{font-size:21px;}
+.top-title .sub{font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:2px;}
+.top-actions{display:flex; align-items:center; gap:16px;}
+.plan-chip{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.04em; text-transform:uppercase;
+  background:rgba(20,68,47,0.09); color:var(--forest-dark); padding:6px 12px; border:1px solid var(--paper-line);
+  display:flex; align-items:center; gap:8px;
+}
+.plan-chip strong{color:var(--forest);}
+.avatar{
+  width:34px; height:34px; border-radius:50%; background:var(--forest); color:var(--paper);
+  display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-weight:600; font-size:14px;
+}
+
+/* Main content grid */
+main{grid-column:2; padding:26px 28px 60px;}
+.panel{display:none;}
+.panel.active{display:block; animation:fadein .3s ease;}
+@keyframes fadein{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+
+/* KPI strip */
+.kpi-row{display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:26px;}
+@media (max-width:1000px){ .kpi-row{grid-template-columns:repeat(2,1fr);} }
+.kpi-card{background:var(--paper-alt); border:1px solid var(--paper-line); border-top:3px solid var(--forest); padding:16px 18px;}
+.kpi-card:nth-child(2){border-top-color:var(--brass);}
+.kpi-card:nth-child(3){border-top-color:var(--red-soft);}
+.kpi-card:nth-child(4){border-top-color:var(--forest);}
+.kpi-card .num{font-family:var(--mono); font-size:24px; font-weight:600; color:var(--forest-dark);}
+.kpi-card .num.warn{color:var(--red);}
+.kpi-card .lbl{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; color:var(--muted); letter-spacing:0.06em; margin-top:4px;}
+
+/* generic card / section */
+.card{background:var(--paper-alt); border:1px solid var(--paper-line);}
+.card-head{display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--paper-line);}
+.card-head h3{font-size:16px;}
+.card-head .hint{font-family:var(--mono); font-size:11px; color:var(--muted);}
+.card-body{padding:16px 18px;}
+.two-col{display:grid; grid-template-columns:1.5fr 1fr; gap:20px;}
+@media (max-width:1100px){ .two-col{grid-template-columns:1fr;} }
+.section-block + .section-block{margin-top:22px;}
+
+/* buttons */
+.btn{font-family:var(--mono); font-size:12.5px; letter-spacing:0.03em; padding:9px 16px; border:1px solid var(--forest); background:transparent; color:var(--forest-dark); cursor:pointer;}
+.btn:hover{background:rgba(20,68,47,0.06);}
+.btn.solid{background:var(--forest); color:var(--paper); border-color:var(--forest);}
+.btn.solid:hover{background:var(--forest-dark);}
+.btn.danger{border-color:var(--red); color:var(--red);}
+.btn.danger:hover{background:rgba(156,43,27,0.06);}
+.btn.small{padding:6px 12px; font-size:11px;}
+
+/* ledger table reused */
+.ledger-row{display:grid; grid-template-columns:80px 1fr 130px 100px; gap:10px; font-family:var(--mono); font-size:13px; padding:10px 0; border-bottom:1px dashed var(--paper-line); align-items:center;}
+.ledger-row.head{color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid var(--paper-line);}
+.ledger-row .amt{text-align:right;}
+.ledger-row .amt.credit{color:var(--forest);}
+.ledger-row .amt.debit{color:var(--red);}
+.status-tag{font-size:10px; text-transform:uppercase; letter-spacing:0.04em; padding:3px 7px; display:inline-block;}
+.status-tag.ok{color:var(--forest); background:rgba(20,68,47,0.08);}
+.status-tag.review{color:var(--red); background:rgba(156,43,27,0.08);}
+.status-tag.learned{color:var(--brass); background:rgba(169,124,47,0.1);}
+
+/* categorize table */
+table.cat-table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px;}
+table.cat-table th{text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--paper-line); font-weight:500;}
+table.cat-table td{padding:10px 14px; border-bottom:1px dashed var(--paper-line); vertical-align:middle;}
+table.cat-table tr.review td{background:rgba(156,43,27,0.06);}
+table.cat-table tr.review td:first-child{box-shadow:inset 3px 0 0 var(--red);}
+.amt-cell{text-align:right;}
+.amt-cell.credit{color:var(--forest);}
+.amt-cell.debit{color:var(--red);}
+.cat-pill{display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:none; border:1px solid transparent; font-family:var(--mono); font-size:12px; color:var(--ink); padding:4px 6px;}
+.cat-pill:hover{border-color:var(--paper-line);}
+.conf-dot{width:7px; height:7px; border-radius:50%; flex-shrink:0;}
+.conf-dot.high{background:var(--forest);}
+.conf-dot.med{background:var(--brass);}
+.conf-dot.low{background:var(--red);}
+.cat-dropdown{position:absolute; background:var(--paper); border:1px solid var(--ink); z-index:30; box-shadow:4px 4px 0 rgba(20,68,47,0.15); min-width:170px; display:none;}
+.cat-dropdown.open{display:block;}
+.cat-dropdown button{display:block; width:100%; text-align:left; background:none; border:none; padding:9px 12px; font-family:var(--mono); font-size:12px; cursor:pointer; color:var(--ink);}
+.cat-dropdown button:hover{background:var(--forest); color:var(--paper);}
+.table-scroll{overflow-x:auto;}
+
+/* filters / tabs */
+.filter-row{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+.filter-chip{font-family:var(--mono); font-size:11.5px; padding:7px 14px; border:1px solid var(--paper-line); background:var(--paper-alt); cursor:pointer; color:var(--ink-soft);}
+.filter-chip.active{background:var(--forest); color:var(--paper); border-color:var(--forest);}
+.search-box{font-family:var(--mono); font-size:12.5px; padding:8px 12px; border:1px solid var(--paper-line); background:var(--paper); color:var(--ink); width:220px;}
+
+/* dropzone */
+.drop-mock{background:var(--paper); border:2px dashed var(--muted); padding:30px; text-align:center; cursor:pointer;}
+.drop-mock:hover{border-color:var(--forest);}
+.drop-mock .dz-label{font-family:var(--mono); font-size:13px; color:var(--ink-soft);}
+.ingest-source-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px;}
+@media (max-width:700px){ .ingest-source-grid{grid-template-columns:1fr;} }
+.ingest-src{border:1px solid var(--paper-line); background:var(--paper-alt); padding:14px; text-align:center; cursor:pointer;}
+.ingest-src:hover{border-color:var(--forest);}
+.ingest-src .ic{font-family:var(--mono); font-size:20px; color:var(--forest); margin-bottom:6px;}
+.ingest-src .nm{font-size:12.5px; color:var(--ink-soft);}
+.scan-area{position:relative; height:100px; background:#fff; border:1px solid var(--paper-line); overflow:hidden; margin:16px 0;}
+.scan-area .doc-lines{position:absolute; inset:14px; display:flex; flex-direction:column; gap:8px;}
+.scan-area .doc-lines div{height:6px; background:#E4DFCF;}
+.scan-area .doc-lines div:nth-child(1){width:60%;}
+.scan-area .doc-lines div:nth-child(3){width:80%;}
+.scan-line{position:absolute; left:0; right:0; top:0; height:2px; background:var(--forest); box-shadow:0 0 8px 1px rgba(20,68,47,0.6); display:none;}
+.scan-line.active{display:block; animation:sweep 1.2s linear infinite;}
+@keyframes sweep{0%{top:0;} 100%{top:100%;}}
+.extract-list{font-family:var(--mono); font-size:12.5px;}
+.extract-list .erow{display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed var(--paper-line); opacity:0;}
+.extract-list .erow.show{opacity:1; animation:typeIn .3s ease-out;}
+@keyframes typeIn{from{opacity:0; transform:translateX(-6px);} to{opacity:1; transform:translateX(0);}}
+
+/* approvals / reminders */
+.approval-card{background:var(--paper-alt); border:1px solid var(--paper-line); padding:16px 18px; margin-bottom:12px;}
+.approval-card.resolved{opacity:0.5;}
+.approval-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.approval-tag{font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--brass); background:rgba(169,124,47,0.12); padding:3px 8px;}
+.approval-title{font-family:var(--serif); font-size:15.5px; color:var(--forest-dark); margin-bottom:4px;}
+.approval-amt{font-size:20px; font-weight:600; color:var(--forest-dark); font-family:var(--mono);}
+.approval-due{font-size:11px; color:var(--muted); margin-top:2px; font-family:var(--mono);}
+.approval-actions{display:flex; gap:10px; margin-top:12px;}
+.approval-status{font-family:var(--mono); font-size:12px; color:var(--forest); margin-top:8px; display:none;}
+.approval-status.show{display:block;}
+.approval-status.declined{color:var(--red);}
+
+/* clients / reminders */
+.client-row{display:grid; grid-template-columns:1fr 110px 100px 80px 130px; gap:10px; align-items:center; padding:12px 0; border-bottom:1px dashed var(--paper-line);}
+.client-row.head{color:var(--muted); font-family:var(--mono); font-size:10.5px; text-transform:uppercase; border-bottom:1px solid var(--paper-line);}
+.contact-btns{display:flex; gap:6px;}
+.contact-ic{width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--paper-line); background:var(--paper); color:var(--forest-dark); text-decoration:none; font-size:13px; cursor:pointer;}
+.contact-ic:hover{border-color:var(--forest); background:var(--paper-alt);}
+.contact-ic.wa:hover{border-color:#2e7d5b;}
+.client-name{font-family:var(--sans); font-size:13.5px; color:var(--ink);}
+.client-name .sub{display:block; font-family:var(--mono); font-size:11px; color:var(--muted);}
+.due-badge{font-family:var(--mono); font-size:11px;}
+.due-badge.late{color:var(--red); font-weight:600;}
+.due-badge.soon{color:var(--brass); font-weight:600;}
+
+/* connected accounts */
+.acct-row{display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px dashed var(--paper-line);}
+.acct-row:last-child{border-bottom:none;}
+.acct-name{display:flex; align-items:center; gap:12px;}
+.acct-badge{width:36px; height:36px; border:1px solid var(--paper-line); background:var(--paper); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--forest-dark);}
+.acct-meta .nm{font-size:13.5px; font-weight:600; color:var(--ink);}
+.acct-meta .sub{font-family:var(--mono); font-size:11px; color:var(--muted);}
+.toggle{position:relative; width:40px; height:22px; background:var(--paper-line); border-radius:12px; cursor:pointer; border:none; flex-shrink:0;}
+.toggle::after{content:''; position:absolute; width:16px; height:16px; border-radius:50%; background:#fff; top:3px; left:3px; transition:left .2s;}
+.toggle.on{background:var(--forest);}
+.toggle.on::after{left:21px;}
+
+/* reports */
+.report-row{display:flex; justify-content:space-between; font-family:var(--mono); font-size:13px; padding:9px 0; border-bottom:1px dashed var(--paper-line);}
+.report-row.total{border-top:2px solid var(--ink); margin-top:6px; padding-top:12px; font-weight:600; border-bottom:none;}
+
+/* pricing tariff (reused in Plan panel) */
+.tariff-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+@media (max-width:900px){ .tariff-grid{grid-template-columns:1fr;} }
+.tariff-card{border:1px solid var(--paper-line); padding:18px; background:var(--paper-alt); position:relative;}
+.tariff-card.current{border:2px solid var(--forest); background:var(--paper);}
+.tariff-card .tag{font-family:var(--mono); font-size:10.5px; color:var(--brass); text-transform:uppercase; letter-spacing:0.08em; font-weight:700;}
+.tariff-card h3{font-size:18px; margin:6px 0 3px;}
+.tariff-card .price{font-family:var(--mono); font-size:26px; color:var(--forest-dark); margin-bottom:4px; font-weight:600;}
+.tariff-card .price span{font-size:12px; color:var(--muted); font-weight:400;}
+.tariff-card ul{list-style:none; font-size:12.5px; color:var(--ink-soft); margin:12px 0;}
+.tariff-card li{padding:6px 0; border-bottom:1px solid var(--paper-line);}
+.current-flag{font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--forest); margin-bottom:8px; letter-spacing:0.06em;}
+
+/* usage bar */
+.usage-bar{height:8px; background:var(--paper-line); margin-top:8px; position:relative;}
+.usage-bar .fill{height:100%; background:var(--forest);}
+.usage-bar .fill.warn{background:var(--red-soft);}
+
+/* chart bars */
+.chart-bars{display:flex; align-items:flex-end; gap:12px; height:150px; padding:10px 4px 0;}
+.chart-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+.chart-col .bar{width:100%; max-width:30px; background:var(--forest); position:relative; transition:height .6s ease;}
+.chart-col .bar-val{font-family:var(--mono); font-size:10px; color:var(--forest-dark); margin-bottom:4px;}
+.chart-col .bar-lbl{font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:8px;}
+.client-dist-row{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+.client-dist-label{width:100px; font-family:var(--mono); font-size:11px; color:var(--ink-soft); flex-shrink:0;}
+.client-dist-track{flex:1; height:14px; background:var(--paper-line); position:relative;}
+.client-dist-fill{height:100%; background:var(--forest);}
+.client-dist-count{width:40px; text-align:right; font-family:var(--mono); font-size:11px; color:var(--forest-dark); font-weight:600;}
+
+#toast{position:fixed; bottom:24px; right:24px; background:var(--forest-dark); color:var(--paper); font-family:var(--mono); font-size:12.5px; padding:13px 18px; max-width:280px; transform:translateY(20px); opacity:0; transition:transform .3s, opacity .3s; z-index:100; border-left:3px solid var(--brass);}
+#toast.show{transform:translateY(0); opacity:1;}
+/* Notifications */
+.notif-wrap{position:relative;}
+.notif-bell{position:relative; width:34px; height:34px; border-radius:8px; background:var(--paper-alt); border:1px solid var(--paper-line); display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer; color:var(--ink-soft); font-family:var(--sans);}
+.notif-bell:hover{border-color:var(--forest); background:var(--paper);}
+.notif-dot{position:absolute; top:5px; right:5px; width:8px; height:8px; border-radius:50%; background:var(--red); border:1.5px solid var(--paper-alt); display:none;}
+.notif-dot.show{display:block;}
+.notif-panel{position:absolute; top:44px; right:0; width:360px; max-height:440px; overflow-y:auto; background:var(--paper-alt); border:1px solid var(--paper-line); box-shadow:0 14px 32px rgba(20,68,47,0.2); z-index:80; display:none;}
+.notif-panel.open{display:block; animation:fadein .18s ease;}
+.notif-head{display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--paper-line); position:sticky; top:0; background:var(--paper-alt);}
+.notif-head h4{font-family:var(--serif); font-size:14px; color:var(--forest-dark); margin:0; font-weight:600;}
+.notif-mark{font-family:var(--mono); font-size:10.5px; color:var(--forest); background:none; border:none; cursor:pointer; text-decoration:underline; padding:0;}
+.notif-item{display:flex; gap:10px; padding:12px 16px; border-bottom:1px dashed var(--paper-line); cursor:pointer; position:relative;}
+.notif-item:last-child{border-bottom:none;}
+.notif-item:hover{background:var(--paper);}
+.notif-item.unread{background:rgba(20,68,47,0.05);}
+.notif-item.unread::before{content:''; position:absolute; left:6px; top:19px; width:6px; height:6px; border-radius:50%; background:var(--red-soft);}
+.notif-ic{width:30px; height:30px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; background:var(--paper); border:1px solid var(--paper-line);}
+.notif-ic.pay{background:rgba(20,68,47,0.12); color:var(--forest); border-color:transparent;}
+.notif-ic.rem{background:rgba(169,124,47,0.16); color:var(--brass); border-color:transparent;}
+.notif-ic.alert{background:rgba(156,43,27,0.12); color:var(--red-soft); border-color:transparent;}
+.notif-ic.team{background:rgba(20,68,47,0.12); color:var(--forest); border-color:transparent;}
+.notif-body{flex:1; min-width:0;}
+.notif-title{font-family:var(--sans); font-size:12.5px; color:var(--ink); font-weight:600;}
+.notif-desc{font-family:var(--sans); font-size:11.5px; color:var(--ink-soft); margin-top:2px; line-height:1.4;}
+.notif-time{font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:5px;}
+.notif-empty{padding:34px 16px; text-align:center; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+.notif-foot{padding:10px 16px; text-align:center; border-top:1px solid var(--paper-line);}
+.notif-foot a{font-family:var(--mono); font-size:11px; color:var(--forest-dark); text-decoration:underline; cursor:pointer;}
+@media (max-width:520px){ .notif-panel{width:92vw; right:-60px;} }
+
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-brand"><img src="data:image/png;base64,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" alt="Munshi logo"><span class="wm-text">MUNSHI<span class="dot">.</span> <span>App</span></span></div>
+    <nav class="side-nav">
+      <div class="side-group-label">Ledger</div>
+      <button class="side-link active" data-panel="overview"><span class="ic">◆</span><span class="lbl">Overview</span></button>
+      <button class="side-link" data-panel="transactions"><span class="ic">≡</span><span class="lbl">Transactions</span></button>
+      <button class="side-link" data-panel="ingest"><span class="ic">↓</span><span class="lbl">Ingest</span></button>
+      <button class="side-link" data-panel="categorize"><span class="ic">#</span><span class="lbl">Categorize</span></button>
+      <div class="side-group-label">Clients</div>
+      <button class="side-link" data-panel="clients"><span class="ic">@</span><span class="lbl">Clients &amp; Reminders</span></button>
+      <button class="side-link" data-panel="approvals"><span class="ic">✓</span><span class="lbl">Approvals</span></button>
+      <div class="side-group-label">Accounts</div>
+      <button class="side-link" data-panel="connected"><span class="ic">⇄</span><span class="lbl">Connected Accounts</span></button>
+      <button class="side-link" data-panel="reports"><span class="ic">▤</span><span class="lbl">Reports &amp; Tax</span></button>
+      <div class="side-group-label">Account</div>
+      <button class="side-link" data-panel="plan"><span class="ic">$</span><span class="lbl">Plan &amp; Billing</span></button>
+      <button class="side-link" data-panel="settings"><span class="ic">⚙</span><span class="lbl">Settings</span></button>
+    </nav>
+    <div class="side-foot">Folio: Bright Studio<br>Signed in as Amna K.</div>
+  </aside>
+
+  <div class="top">
+    <div class="top-inner">
+      <div class="top-title">
+        <h1 id="topTitle">Overview</h1>
+        <div class="sub mono" id="topSub">Aug 2026 · Last synced 4 min ago</div>
+      </div>
+      <div class="top-actions">
+        <div class="plan-chip" id="planChip">Plan: <strong>Freelancer Pro</strong></div>
+        <div class="notif-wrap" id="notifWrap">
+          <button class="notif-bell" onclick="toggleNotif(event)" title="Notifications">🔔<span class="notif-dot" id="notifDot"></span></button>
+          <div class="notif-panel" id="notifPanel">
+            <div class="notif-head"><h4>Notifications</h4><button class="notif-mark" onclick="markAllRead(event)">Mark all read</button></div>
+            <div class="notif-list" id="notifList"></div>
+            <div class="notif-foot"><a onclick="toast('Opening all notifications…')">View all notifications</a></div>
+          </div>
+        </div>
+        <div class="avatar" id="avatarInitial">A</div>
+      </div>
+    </div>
+    <div id="teamBanner" style="display:none; background:rgba(169,124,47,0.1); border-top:1px dashed var(--paper-line); padding:8px 28px; font-family:var(--mono); font-size:11.5px; color:var(--ink-soft);"></div>
+  </div>
+
+  <main>
+
+    <!-- ============ OVERVIEW ============ -->
+    <section class="panel active" id="panel-overview">
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="num mono">PKR 397,700</div><div class="lbl">Income this month</div></div>
+        <div class="kpi-card"><div class="num mono">PKR 13,440</div><div class="lbl">Spent this month</div></div>
+        <div class="kpi-card"><div class="num mono">PKR 384,260</div><div class="lbl">Net, ready to file</div></div>
+        <div class="kpi-card"><div class="num mono">6</div><div class="lbl">Total clients</div></div>
+        <div class="kpi-card"><div class="num mono warn">3</div><div class="lbl">Needs review</div></div>
+      </div>
+
+      <div class="two-col">
+        <div class="card section-block">
+          <div class="card-head"><h3>Income trend</h3><span class="hint">Last 6 months, PKR</span></div>
+          <div class="card-body">
+            <div class="chart-bars" id="incomeChart"></div>
+          </div>
+        </div>
+        <div class="card section-block">
+          <div class="card-head"><h3>Income by client</h3><span class="hint">This month</span></div>
+          <div class="card-body">
+            <div class="client-dist-row"><div class="client-dist-label">Bright Studio</div><div class="client-dist-track"><div class="client-dist-fill" style="width:46%;"></div></div><div class="client-dist-count">46%</div></div>
+            <div class="client-dist-row"><div class="client-dist-label">NovaTech Inc</div><div class="client-dist-track"><div class="client-dist-fill" style="width:24%; background:var(--brass);"></div></div><div class="client-dist-count">24%</div></div>
+            <div class="client-dist-row"><div class="client-dist-label">Aiwa Collective</div><div class="client-dist-track"><div class="client-dist-fill" style="width:15%; background:var(--red-soft);"></div></div><div class="client-dist-count">15%</div></div>
+            <div class="client-dist-row"><div class="client-dist-label">Other (3)</div><div class="client-dist-track"><div class="client-dist-fill" style="width:15%; background:var(--muted);"></div></div><div class="client-dist-count">15%</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col section-block">
+        <div class="card section-block">
+          <div class="card-head"><h3>Recent activity</h3><span class="hint">Last 5 entries</span></div>
+          <div class="card-body">
+            <div class="ledger-row head"><span>Date</span><span>Description</span><span style="text-align:right;">Amount</span><span style="text-align:right;">Status</span></div>
+            <div class="ledger-row"><span>15 Aug</span><span>WhatsApp — Client retainer</span><span class="amt credit">+PKR 60,000</span><span class="status-tag ok">Filed</span></div>
+            <div class="ledger-row"><span>14 Aug</span><span>Wise — Figma Subscription</span><span class="amt debit">–PKR 3,200</span><span class="status-tag ok">Filed</span></div>
+            <div class="ledger-row"><span>13 Aug</span><span>Payoneer — NovaTech Inc</span><span class="amt credit">+PKR 96,200</span><span class="status-tag ok">Filed</span></div>
+            <div class="ledger-row"><span>12 Aug</span><span>Bank — LESCO Electricity</span><span class="amt debit">–PKR 8,400</span><span class="status-tag review">Review</span></div>
+            <div class="ledger-row"><span>11 Aug</span><span>Unknown merchant — QT*4471</span><span class="amt debit">–PKR 1,840</span><span class="status-tag review">Review</span></div>
+          </div>
+        </div>
+
+        <div class="card section-block">
+          <div class="card-head"><h3>Quick actions</h3></div>
+          <div class="card-body" style="display:flex; flex-direction:column; gap:10px;">
+            <button class="btn solid" onclick="showPanel('ingest')">↓ Forward a new statement</button>
+            <button class="btn" onclick="showPanel('categorize')"># Review 3 uncategorized</button>
+            <button class="btn" onclick="showPanel('reports')">▤ Export this month's summary</button>
+            <button class="btn" onclick="showPanel('clients')">@ 2 clients owe you money</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card section-block">
+        <div class="card-head"><h3>Plan usage</h3><span class="hint">Freelancer Pro — unlimited transactions</span></div>
+        <div class="card-body">
+          <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:12px; color:var(--ink-soft);">
+            <span>214 transactions this cycle</span><span>Renews 1 Sep 2026</span>
+          </div>
+          <div class="usage-bar"><div class="fill" style="width:34%;"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TRANSACTIONS ============ -->
+    <section class="panel" id="panel-transactions">
+      <div class="filter-row">
+        <button class="filter-chip active" data-filter="all">All</button>
+        <button class="filter-chip" data-filter="credit">Income</button>
+        <button class="filter-chip" data-filter="debit">Expenses</button>
+        <button class="filter-chip" data-filter="review">Needs review</button>
+        <input class="search-box" placeholder="Search description…" style="margin-left:auto;">
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="ledger-row head"><span>Date</span><span>Description</span><span style="text-align:right;">Amount</span><span style="text-align:right;">Status</span></div>
+          <div id="txList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ INGEST ============ -->
+    <section class="panel" id="panel-ingest">
+      <div class="card">
+        <div class="card-head"><h3>Bring in a new statement</h3><span class="hint">Folio 02</span></div>
+        <div class="card-body">
+          <div class="ingest-source-grid">
+            <div class="ingest-src" onclick="runScan()"><div class="ic">✉</div><div class="nm">Payoneer / Wise statement</div></div>
+            <div class="ingest-src" onclick="runScan()"><div class="ic">📷</div><div class="nm">WhatsApp screenshot</div></div>
+            <div class="ingest-src" onclick="runScan()"><div class="ic">🧾</div><div class="nm">Receipt photo</div></div>
+          </div>
+          <div class="drop-mock" style="margin-top:16px;" onclick="runScan()">
+            <div class="scan-area">
+              <div class="doc-lines"><div></div><div style="width:40%"></div><div></div><div style="width:55%"></div></div>
+              <div class="scan-line" id="scanLine"></div>
+            </div>
+            <div class="dz-label" id="dzLabel">Click to simulate a drop, or drag a file here</div>
+            <div class="extract-list" id="extractList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CATEGORIZE ============ -->
+    <section class="panel" id="panel-categorize">
+      <div class="card">
+        <div class="card-head"><h3>Categorize</h3><span class="hint">Munshi learns from every correction</span></div>
+        <div class="card-body table-scroll">
+          <table class="cat-table" id="catTable">
+            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th style="text-align:right;">Amount</th><th>Status</th></tr></thead>
+            <tbody id="catBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CLIENTS ============ -->
+    <section class="panel" id="panel-clients">
+      <div class="card">
+        <div class="card-head"><h3>Clients &amp; who owes you</h3><span class="hint">Drafted reminders, sent with one tap</span></div>
+        <div class="card-body">
+          <div class="client-row head"><span>Client</span><span>Amount due</span><span>Due</span><span>Contact</span><span></span></div>
+          <div class="client-row">
+            <div class="client-name">Bright Studio LLC<span class="sub">Retainer · monthly</span></div>
+            <div class="mono">PKR 60,000</div>
+            <div class="due-badge late">4 days late</div>
+            <div class="contact-btns">
+              <a class="contact-ic" href="mailto:accounts@brightstudio.pk" title="Email accounts@brightstudio.pk">✉</a>
+              <a class="contact-ic wa" href="https://wa.me/923001112223" target="_blank" rel="noopener" title="WhatsApp +92 300 1112223">◐</a>
+            </div>
+            <button class="btn small solid" onclick="toast('Reminder sent to Bright Studio LLC')">Send reminder</button>
+          </div>
+          <div class="client-row">
+            <div class="client-name">NovaTech Inc<span class="sub">Project milestone</span></div>
+            <div class="mono">PKR 45,000</div>
+            <div class="due-badge soon">Due in 2 days</div>
+            <div class="contact-btns">
+              <a class="contact-ic" href="mailto:finance@novatech.com" title="Email finance@novatech.com">✉</a>
+              <a class="contact-ic wa" href="https://wa.me/14155552671" target="_blank" rel="noopener" title="WhatsApp +1 415 555 2671">◐</a>
+            </div>
+            <button class="btn small" onclick="toast('Reminder scheduled for NovaTech Inc')">Schedule</button>
+          </div>
+          <div class="client-row">
+            <div class="client-name">Aiwa Collective<span class="sub">Retainer · monthly</span></div>
+            <div class="mono">PKR 28,000</div>
+            <div class="due-badge">Paid</div>
+            <div class="contact-btns">
+              <a class="contact-ic" href="mailto:hello@aiwacollective.co" title="Email hello@aiwacollective.co">✉</a>
+              <a class="contact-ic wa" href="https://wa.me/923214445556" target="_blank" rel="noopener" title="WhatsApp +92 321 4445556">◐</a>
+            </div>
+            <button class="btn small" disabled style="opacity:.4; cursor:default;">Settled</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ APPROVALS ============ -->
+    <section class="panel" id="panel-approvals">
+      <div class="approval-card" id="apr1">
+        <div class="approval-head"><span class="approval-tag">Bill</span><span class="mono" style="font-size:11px; color:var(--muted);">LESCO — bank feed</span></div>
+        <div class="approval-title">Electricity bill, August</div>
+        <div class="approval-amt">PKR 8,400</div>
+        <div class="approval-due">Due 22 Aug 2026</div>
+        <div class="approval-actions">
+          <button class="btn danger" onclick="resolveApproval('apr1', false)">Decline</button>
+          <button class="btn solid" onclick="resolveApproval('apr1', true)">Approve &amp; log</button>
+        </div>
+        <div class="approval-status" id="apr1-status"></div>
+      </div>
+      <div class="approval-card" id="apr2">
+        <div class="approval-head"><span class="approval-tag">Payout</span><span class="mono" style="font-size:11px; color:var(--muted);">Payoneer — pending</span></div>
+        <div class="approval-title">Withdraw to bank account</div>
+        <div class="approval-amt">PKR 15,000</div>
+        <div class="approval-due">Requested by you, 2 days ago</div>
+        <div class="approval-actions">
+          <button class="btn danger" onclick="resolveApproval('apr2', false)">Cancel</button>
+          <button class="btn solid" onclick="resolveApproval('apr2', true)">Confirm</button>
+        </div>
+        <div class="approval-status" id="apr2-status"></div>
+      </div>
+    </section>
+
+    <!-- ============ CONNECTED ============ -->
+    <section class="panel" id="panel-connected">
+      <div class="card">
+        <div class="card-head"><h3>Connected accounts</h3><span class="hint">New activity syncs automatically</span></div>
+        <div class="card-body" style="padding:0;">
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">UPW</div><div class="acct-meta"><div class="nm">Upwork</div><div class="sub">Gmail API polling · synced 6 min ago</div></div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">FVR</div><div class="acct-meta"><div class="nm">Fiverr</div><div class="sub">Gmail API polling · synced 9 min ago</div></div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">PYN</div><div class="acct-meta"><div class="nm">Payoneer</div><div class="sub">Gmail API polling · synced 4 min ago</div></div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">WSE</div><div class="acct-meta"><div class="nm">Wise</div><div class="sub">Gmail API polling · synced 1 hr ago</div></div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">JC</div><div class="acct-meta"><div class="nm">JazzCash</div><div class="sub">SMS forwarding · synced 12 min ago</div></div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">EP</div><div class="acct-meta"><div class="nm">Easypaisa</div><div class="sub">Not connected</div></div></div><button class="btn small" onclick="toast('Connecting to Easypaisa…')">Connect</button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">BNK</div><div class="acct-meta"><div class="nm">HBL Bank Feed</div><div class="sub">Not connected</div></div></div><button class="btn small" onclick="toast('Connecting to HBL…')">Connect</button></div>
+          <div class="acct-row"><div class="acct-name"><div class="acct-badge">WA</div><div class="acct-meta"><div class="nm">WhatsApp forwarding</div><div class="sub">+92 3XX XXXXXXX</div></div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ REPORTS ============ -->
+    <section class="panel" id="panel-reports">
+      <div class="card section-block" style="border-color:var(--brass);">
+        <div class="card-head"><h3>Next filing deadline</h3><span class="hint">Quarterly FBR return</span></div>
+        <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; gap:22px;">
+            <div><div class="mono" style="font-size:26px; font-weight:600; color:var(--forest-dark);" id="cdD">—</div><div class="mono" style="font-size:10px; color:var(--muted); text-transform:uppercase;">Days</div></div>
+            <div><div class="mono" style="font-size:26px; font-weight:600; color:var(--forest-dark);" id="cdH">—</div><div class="mono" style="font-size:10px; color:var(--muted); text-transform:uppercase;">Hours</div></div>
+            <div><div class="mono" style="font-size:26px; font-weight:600; color:var(--forest-dark);" id="cdM">—</div><div class="mono" style="font-size:10px; color:var(--muted); text-transform:uppercase;">Mins</div></div>
+          </div>
+          <button class="btn solid" onclick="toast('FBR summary exported — Aug 2026')">Export FBR summary (PDF)</button>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head"><h3>August summary</h3></div>
+          <div class="card-body">
+            <div class="report-row"><span>Client income</span><span class="mono">PKR 397,700</span></div>
+            <div class="report-row"><span>Platform fees</span><span class="mono">– PKR 1,840</span></div>
+            <div class="report-row"><span>Utilities</span><span class="mono">– PKR 8,400</span></div>
+            <div class="report-row"><span>Software &amp; tools</span><span class="mono">– PKR 3,200</span></div>
+            <div class="report-row total"><span>Net income</span><span class="mono">PKR 384,260</span></div>
+            <button class="btn solid" style="width:100%; margin-top:16px;" onclick="toast('FBR summary exported — Aug 2026')">Export FBR summary (PDF)</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Filing history</h3></div>
+          <div class="card-body">
+            <div class="report-row"><span>Q2 FY26 (Apr–Jun)</span><span class="mono">Exported</span></div>
+            <div class="report-row"><span>Q1 FY26 (Jan–Mar)</span><span class="mono">Exported</span></div>
+            <div class="report-row"><span>Q4 FY25 (Oct–Dec)</span><span class="mono">Exported</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PLAN ============ -->
+    <section class="panel" id="panel-plan">
+      <div id="planSoloView">
+        <div style="display:flex; justify-content:center; margin-bottom:16px;">
+          <button class="btn small" id="planBtnMonthly" style="border-radius:0; background:var(--forest); color:var(--paper);" onclick="setPlanBilling('monthly')">Monthly</button>
+          <button class="btn small" id="planBtnYearly" style="border-radius:0; border-left:none;" onclick="setPlanBilling('yearly')">Yearly <span style="color:var(--brass);">· 2 mo free</span></button>
+        </div>
+        <div class="tariff-grid">
+          <div class="tariff-card">
+            <div class="tag">Starter</div><h3>Khata</h3>
+            <div class="price">$0</div>
+            <ul><li>25 transactions/mo</li><li>Statement reading</li><li>Monthly PDF export</li></ul>
+            <button class="btn" style="width:100%;" disabled>Downgrade</button>
+          </div>
+          <div class="tariff-card current">
+            <div class="current-flag">✓ Your current plan</div>
+            <div class="tag">Freelancer</div><h3>Munshi Pro</h3>
+            <div class="price"><span class="plan-price-m">$10 <span style="font-size:12px;">/mo</span></span><span class="plan-price-y" style="display:none;">$8 <span style="font-size:12px;">/mo</span></span></div>
+            <div class="mono" style="font-size:10.5px; color:var(--muted); margin:-8px 0 10px;" id="proPlanNote">billed monthly</div>
+            <ul><li>Unlimited transactions</li><li>Merchant-learning categorization</li><li>Client due-date reminders</li><li>FBR-ready exports</li></ul>
+            <button class="btn solid" style="width:100%;" disabled>Active</button>
+          </div>
+          <div class="tariff-card">
+            <div class="tag">Small Business</div><h3>Munshi Teams</h3>
+            <div class="price"><span class="plan-price-m">$30 <span style="font-size:12px;">/mo</span></span><span class="plan-price-y" style="display:none;">$25 <span style="font-size:12px;">/mo</span></span></div>
+            <div class="mono" style="font-size:10.5px; color:var(--muted); margin:-8px 0 10px;" id="teamsPlanNote">billed monthly</div>
+            <ul><li>Everything in Pro</li><li>Owner + up to 4 team members</li><li>Accountant hand-off view</li></ul>
+            <button class="btn solid" style="width:100%;" onclick="toast('Upgrade request sent — we\'ll follow up on WhatsApp')">Upgrade to Teams</button>
+          </div>
+        </div>
+        <div class="card section-block">
+          <div class="card-head"><h3>Billing history</h3></div>
+          <div class="card-body">
+            <div class="report-row"><span>1 Aug 2026 — Freelancer Pro</span><span class="mono">$10.00</span></div>
+            <div class="report-row"><span>1 Jul 2026 — Freelancer Pro</span><span class="mono">$10.00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="planMemberView" style="display:none;">
+        <div class="card">
+          <div class="card-head"><h3>Your plan</h3><span class="hint">Munshi Teams</span></div>
+          <div class="card-body">
+            <p style="font-size:13.5px; color:var(--ink-soft); max-width:52ch;">You're on a <strong>Munshi Teams</strong> seat as part of <strong id="planMemberTeamName">your team</strong>'s workspace. Billing and seats are managed by the account owner — you won't see charges here, and the owner can't see this message either without opening this page.</p>
+            <button class="btn" style="margin-top:14px;" onclick="toast('Request sent to your team owner')">Ask the owner about your plan</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="panel" id="panel-settings">
+      <div class="card">
+        <div class="card-head"><h3>Business details</h3></div>
+        <div class="card-body" style="display:flex; flex-direction:column; gap:12px; max-width:420px;">
+          <label class="mono" style="font-size:11px; color:var(--muted);">Business name<input class="search-box" style="width:100%; margin-top:4px;" value="Bright Studio"></label>
+          <label class="mono" style="font-size:11px; color:var(--muted);">Default currency<input class="search-box" style="width:100%; margin-top:4px;" value="PKR"></label>
+          <label class="mono" style="font-size:11px; color:var(--muted);">WhatsApp forwarding number<input class="search-box" style="width:100%; margin-top:4px;" value="+92 3XX XXXXXXX"></label>
+          <button class="btn solid" style="width:fit-content;" onclick="toast('Settings saved')">Save changes</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ---------- plan billing toggle ---------- */
+function setPlanBilling(mode){
+  document.getElementById('planBtnMonthly').classList.toggle('solid', mode==='monthly');
+  document.getElementById('planBtnMonthly').style.background = mode==='monthly' ? 'var(--forest)' : 'transparent';
+  document.getElementById('planBtnMonthly').style.color = mode==='monthly' ? 'var(--paper)' : 'var(--forest-dark)';
+  document.getElementById('planBtnYearly').style.background = mode==='yearly' ? 'var(--forest)' : 'transparent';
+  document.getElementById('planBtnYearly').style.color = mode==='yearly' ? 'var(--paper)' : 'var(--forest-dark)';
+  document.querySelectorAll('.plan-price-m').forEach(el=>el.style.display = mode==='monthly' ? 'inline' : 'none');
+  document.querySelectorAll('.plan-price-y').forEach(el=>el.style.display = mode==='yearly' ? 'inline' : 'none');
+  document.getElementById('proPlanNote').textContent = mode==='monthly' ? 'billed monthly' : 'billed $96/year';
+  document.getElementById('teamsPlanNote').textContent = mode==='monthly' ? 'billed monthly' : 'billed $300/year';
+}
+
+/* ---------- team member context ---------- */
+(function(){
+  const params = new URLSearchParams(location.search);
+  const ctx = params.get('ctx') || 'solo';
+  const team = params.get('team');
+  const biz = params.get('biz');
+  if(ctx==='member' && team){
+    document.getElementById('planChip').innerHTML = 'Plan: <strong>Munshi Teams</strong> (member)';
+    document.getElementById('teamBanner').style.display = 'block';
+    document.getElementById('teamBanner').textContent = '⚑ Team: ' + team + ' — your ledger is private. Your team owner can see it; teammates cannot.';
+    document.getElementById('planSoloView').style.display = 'none';
+    document.getElementById('planMemberView').style.display = 'block';
+    document.getElementById('planMemberTeamName').textContent = team;
+  }
+  if(biz){
+    document.getElementById('topSub').textContent = biz + ' · Aug 2026';
+  }
+})();
+
+/* ---------- income trend chart ---------- */
+(function(){
+  const data=[{m:'Mar',v:298000},{m:'Apr',v:312000},{m:'May',v:276000},{m:'Jun',v:341000},{m:'Jul',v:365000},{m:'Aug',v:397700}];
+  const max=Math.max(...data.map(d=>d.v));
+  const wrap=document.getElementById('incomeChart');
+  data.forEach(d=>{
+    const col=document.createElement('div'); col.className='chart-col';
+    const h=Math.round((d.v/max)*120);
+    col.innerHTML=`<div class="bar-val">${(d.v/1000).toFixed(0)}k</div><div class="bar" style="height:0px;"></div><div class="bar-lbl">${d.m}</div>`;
+    wrap.appendChild(col);
+    setTimeout(()=>{ col.querySelector('.bar').style.height=h+'px'; }, 60);
+  });
+})();
+
+/* ---------- filing deadline countdown ---------- */
+function nextDeadline(){
+  const now = new Date(); let d = new Date(now.getFullYear(),8,30,23,59,59);
+  if(now>d) d = new Date(now.getFullYear()+1,8,30,23,59,59);
+  return d;
+}
+function tickCd(){
+  const diff = nextDeadline() - new Date();
+  document.getElementById('cdD').textContent = Math.floor(diff/86400000);
+  document.getElementById('cdH').textContent = String(Math.floor(diff/3600000)%24).padStart(2,'0');
+  document.getElementById('cdM').textContent = String(Math.floor(diff/60000)%60).padStart(2,'0');
+}
+tickCd(); setInterval(tickCd, 30000);
+
+/* ---------- panel switching ---------- */
+const titles = {
+  overview:['Overview','Aug 2026 · Last synced 4 min ago'],
+  transactions:['Transactions','214 entries this cycle'],
+  ingest:['Ingest','Bring in a statement, screenshot, or receipt'],
+  categorize:['Categorize','3 need your eye'],
+  clients:['Clients & Reminders','2 clients owe you money'],
+  approvals:['Approvals','2 pending'],
+  connected:['Connected Accounts','5 sources'],
+  reports:['Reports & Tax','FBR-ready exports'],
+  plan:['Plan & Billing','Freelancer Pro'],
+  settings:['Settings','Business profile']
+};
+function showPanel(name){
+  document.querySelectorAll('.side-link').forEach(l=>l.classList.toggle('active', l.dataset.panel===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+name));
+  document.getElementById('topTitle').textContent = titles[name][0];
+  document.getElementById('topSub').textContent = titles[name][1];
+}
+document.querySelectorAll('.side-link').forEach(l=>l.addEventListener('click',()=>showPanel(l.dataset.panel)));
+
+/* ---------- toast ---------- */
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+/* ---------- transactions list ---------- */
+const TX=[
+  {d:'15 Aug',desc:'WhatsApp — Client retainer',a:60000,credit:true,status:'ok'},
+  {d:'14 Aug',desc:'Wise — Figma Subscription',a:3200,credit:false,status:'ok'},
+  {d:'13 Aug',desc:'Payoneer — NovaTech Inc',a:96200,credit:true,status:'ok'},
+  {d:'12 Aug',desc:'Bank — LESCO Electricity',a:8400,credit:false,status:'review'},
+  {d:'11 Aug',desc:'Unknown merchant — QT*4471',a:1840,credit:false,status:'review'},
+  {d:'09 Aug',desc:'Payoneer — Bright Studio LLC',a:184500,credit:true,status:'ok'},
+  {d:'07 Aug',desc:'WhatsApp — Cash client',a:12000,credit:true,status:'learned'},
+  {d:'05 Aug',desc:'Bank — Internet bill',a:4500,credit:false,status:'ok'},
+];
+function fmt(n,credit){return (credit?'+PKR ':'–PKR ')+n.toLocaleString();}
+function renderTx(filter){
+  const list=document.getElementById('txList'); list.innerHTML='';
+  TX.filter(t=> filter==='all' ? true : filter==='credit' ? t.credit : filter==='debit' ? !t.credit : t.status==='review')
+    .forEach(t=>{
+      const row=document.createElement('div'); row.className='ledger-row';
+      row.innerHTML=`<span>${t.d}</span><span>${t.desc}</span><span class="amt ${t.credit?'credit':'debit'}">${fmt(t.a,t.credit)}</span><span style="text-align:right;"><span class="status-tag ${t.status}">${t.status==='ok'?'Filed':t.status==='review'?'Review':'Learned'}</span></span>`;
+      list.appendChild(row);
+    });
+}
+renderTx('all');
+document.querySelectorAll('.filter-chip').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active'); renderTx(c.dataset.filter);
+}));
+
+/* ---------- categorize table ---------- */
+const CATS=['Client income','Utilities','Software & tools','Platform fees','Meals & travel','Uncategorized'];
+const CATROWS=[
+  {d:'15 Aug',desc:'WhatsApp — Client retainer',cat:'Client income',a:60000,credit:true,conf:'high',status:'ok'},
+  {d:'14 Aug',desc:'Wise — Figma Subscription',cat:'Software & tools',a:3200,credit:false,conf:'high',status:'ok'},
+  {d:'12 Aug',desc:'Bank — LESCO Electricity',cat:'Utilities',a:8400,credit:false,conf:'med',status:'review'},
+  {d:'11 Aug',desc:'Unknown merchant — QT*4471',cat:'Uncategorized',a:1840,credit:false,conf:'low',status:'review'},
+  {d:'07 Aug',desc:'WhatsApp — Cash client',cat:'Client income',a:12000,credit:true,conf:'med',status:'learned'},
+];
+function renderCat(){
+  const body=document.getElementById('catBody'); body.innerHTML='';
+  CATROWS.forEach((r,i)=>{
+    const tr=document.createElement('tr'); tr.className=r.status==='review'?'review':'';
+    tr.innerHTML=`<td>${r.d}</td><td>${r.desc}</td>
+      <td><button class="cat-pill" onclick="openCatDropdown(event,${i})"><span class="conf-dot ${r.conf}"></span>${r.cat} ▾</button></td>
+      <td class="amt-cell ${r.credit?'credit':'debit'}">${fmt(r.a,r.credit)}</td>
+      <td><span class="status-tag ${r.status}">${r.status==='ok'?'OK':r.status==='review'?'Review':'Learned'}</span></td>`;
+    body.appendChild(tr);
+  });
+}
+renderCat();
+let openDD=null;
+function openCatDropdown(e,i){
+  if(openDD) openDD.remove();
+  const dd=document.createElement('div'); dd.className='cat-dropdown open';
+  CATS.forEach(c=>{
+    const b=document.createElement('button'); b.textContent=c;
+    b.onclick=()=>{ CATROWS[i].cat=c; CATROWS[i].status='ok'; CATROWS[i].conf='high'; renderCat(); dd.remove(); toast('Categorized as '+c+' — Munshi will remember this'); };
+    dd.appendChild(b);
+  });
+  document.body.appendChild(dd);
+  const r=e.target.getBoundingClientRect();
+  dd.style.top=(r.bottom+window.scrollY+4)+'px'; dd.style.left=(r.left+window.scrollX)+'px';
+  openDD=dd;
+  setTimeout(()=>document.addEventListener('click',function h(ev){ if(!dd.contains(ev.target)){dd.remove(); document.removeEventListener('click',h);} }),10);
+}
+
+/* ---------- approvals ---------- */
+function resolveApproval(id,approve){
+  const card=document.getElementById(id); const status=document.getElementById(id+'-status');
+  card.classList.add('resolved');
+  status.textContent = approve ? '✓ Approved and logged to ledger' : '✕ Declined';
+  status.classList.add('show'); if(!approve) status.classList.add('declined');
+  card.querySelectorAll('button').forEach(b=>b.style.display='none');
+}
+
+/* ---------- ingest scan demo ---------- */
+function runScan(){
+  const line=document.getElementById('scanLine'); const label=document.getElementById('dzLabel');
+  const list=document.getElementById('extractList');
+  list.innerHTML=''; line.classList.add('active'); label.textContent='Reading…';
+  const rows=[['12 Aug','LESCO Electricity','– PKR 8,400'],['13 Aug','Payoneer payout','+ PKR 96,200'],['14 Aug','Figma Subscription','– PKR 3,200'],['15 Aug','Client retainer','+ PKR 60,000']];
+  rows.forEach((r,i)=>{
+    setTimeout(()=>{
+      const d=document.createElement('div'); d.className='erow';
+      d.innerHTML=`<span>${r[0]} — ${r[1]}</span><span>${r[2]}</span>`;
+      list.appendChild(d); requestAnimationFrame(()=>d.classList.add('show'));
+      if(i===rows.length-1){ line.classList.remove('active'); label.textContent='4 entries extracted — added to your ledger'; toast('4 entries extracted and filed'); }
+    }, 500+i*450);
+  });
+}
+
+/* ---------- notifications ---------- */
+const NOTIFICATIONS=[
+  {type:'pay', title:'Payment received', desc:'Bright Studio LLC paid PKR 60,000 via WhatsApp', time:'2 min ago', unread:true},
+  {type:'rem', title:'Client reminder due', desc:'NovaTech Inc — PKR 96,200 milestone due in 2 days', time:'1 hr ago', unread:true},
+  {type:'alert', title:'Needs review', desc:'Unknown merchant QT*4471 — PKR 1,840, uncategorized', time:'3 hrs ago', unread:true},
+  {type:'pay', title:'Payment received', desc:'Payoneer — NovaTech Inc, PKR 96,200 credited', time:'Yesterday', unread:false},
+  {type:'rem', title:'Plan renewal reminder', desc:'Freelancer Pro renews 1 Sep 2026 — PKR 2,800', time:'2 days ago', unread:false},
+  {type:'alert', title:'Bill approval needed', desc:'LESCO electricity bill, PKR 8,400, due 22 Aug', time:'2 days ago', unread:false},
+];
+function notifIcon(t){ return t==='pay' ? '💰' : t==='rem' ? '⏰' : '⚠'; }
+function renderNotif(){
+  const list=document.getElementById('notifList');
+  if(!list) return;
+  list.innerHTML='';
+  if(NOTIFICATIONS.length===0){ list.innerHTML='<div class="notif-empty">No notifications yet.</div>'; }
+  NOTIFICATIONS.forEach((n,i)=>{
+    const div=document.createElement('div');
+    div.className='notif-item'+(n.unread?' unread':'');
+    div.onclick=()=>{ n.unread=false; renderNotif(); toast(n.title); };
+    div.innerHTML=`<div class="notif-ic ${n.type}">${notifIcon(n.type)}</div><div class="notif-body"><div class="notif-title">${n.title}</div><div class="notif-desc">${n.desc}</div><div class="notif-time">${n.time}</div></div>`;
+    list.appendChild(div);
+  });
+  const dot=document.getElementById('notifDot');
+  if(dot) dot.classList.toggle('show', NOTIFICATIONS.some(n=>n.unread));
+}
+function toggleNotif(e){
+  e.stopPropagation();
+  document.getElementById('notifPanel').classList.toggle('open');
+}
+function markAllRead(e){
+  e.stopPropagation();
+  NOTIFICATIONS.forEach(n=>n.unread=false);
+  renderNotif();
+  toast('All notifications marked as read');
+}
+document.addEventListener('click', (e)=>{
+  const wrap=document.getElementById('notifWrap');
+  const panel=document.getElementById('notifPanel');
+  if(wrap && panel && !wrap.contains(e.target)) panel.classList.remove('open');
+});
+renderNotif();
+</script>
+</body>
+</html>

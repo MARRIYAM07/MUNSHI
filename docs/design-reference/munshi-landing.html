@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munshi — Your books, sorted.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EAE3D3;
+    --paper-alt:#F3EEE1;
+    --paper-line:#C9C2AC;
+    --ink:#1A2E22;
+    --ink-soft:#4A5148;
+    --forest:#14442F;
+    --forest-dark:#0D2E1F;
+    --red:#9C2B1B;
+    --red-soft:#C2543F;
+    --brass:#A97C2F;
+    --muted:#7A7361;
+    --serif:'IBM Plex Serif', Georgia, serif;
+    --sans:'IBM Plex Sans', -apple-system, sans-serif;
+    --mono:'IBM Plex Mono', monospace;
+    --sp1:4px; --sp2:8px; --sp3:16px; --sp4:24px; --sp5:32px; --sp6:48px; --sp7:64px; --sp8:96px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.5;
+    overflow-x:hidden;
+    background-image:
+      repeating-linear-gradient(transparent, transparent 35px, rgba(201,194,172,0.55) 36px);
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 var(--sp5);}
+  h1,h2,h3{font-family:var(--serif); font-weight:600; color:var(--forest-dark); letter-spacing:-0.01em;}
+  .mono{font-family:var(--mono);}
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--brass); display:flex; align-items:center; gap:10px; font-weight:600;
+  }
+  .eyebrow::before{content:''; width:22px; height:2px; background:var(--brass);}
+  a{color:inherit;}
+  ::selection{background:var(--red); color:var(--paper);}
+
+  /* ---------- NAV ---------- */
+  nav{
+    position:sticky; top:0; z-index:50;
+    background:var(--paper); border-bottom:1px solid var(--paper-line);
+  }
+  .nav-inner{
+    max-width:1180px; margin:0 auto; padding:0 var(--sp5);
+    display:flex; align-items:center; justify-content:space-between; height:64px;
+  }
+  .wordmark{font-family:var(--serif); font-size:20px; font-weight:700; color:var(--forest-dark); display:flex; align-items:center; gap:9px;}
+  .wordmark img{width:32px; height:33px; border-radius:7px; object-fit:cover; flex-shrink:0;}
+  .wordmark .dot{color:var(--red); font-family:var(--mono);}
+  .tabs{display:flex; gap:2px;}
+  .tabs a{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase;
+    padding:10px 16px; color:var(--ink-soft); text-decoration:none; border-bottom:2px solid transparent;
+    transition:color .2s, border-color .2s;
+  }
+  .tabs a:hover{color:var(--forest-dark); border-color:var(--brass);}
+  .nav-cta{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.04em;
+    background:var(--forest); color:var(--paper); padding:9px 18px;
+    text-decoration:none; border:1px solid var(--forest);
+  }
+  .nav-cta:hover{background:var(--forest-dark);}
+  @media (max-width:820px){ .tabs{display:none;} }
+
+  /* ---------- HERO ---------- */
+  header.hero{padding:var(--sp8) 0 var(--sp7);}
+  .hero-grid{display:grid; grid-template-columns:1.05fr 0.95fr; gap:var(--sp7); align-items:start;}
+  @media (max-width:900px){ .hero-grid{grid-template-columns:1fr;} }
+  .hero-copy h1{font-size:clamp(34px,4.6vw,56px); line-height:1.05; margin:var(--sp4) 0 var(--sp4);}
+  .hero-copy h1 em{font-style:normal; color:var(--red); border-bottom:3px solid var(--red-soft);}
+  .hero-sub{font-size:17px; color:var(--ink-soft); max-width:46ch; margin-bottom:var(--sp5);}
+  .hero-ctas{display:flex; align-items:center; gap:var(--sp4); flex-wrap:wrap;}
+  .btn-primary{
+    font-family:var(--mono); font-size:13px; letter-spacing:0.03em;
+    background:var(--red); color:var(--paper); padding:13px 22px; text-decoration:none;
+    border:1px solid var(--red); display:inline-block; transition:transform .15s, background .15s;
+  }
+  .btn-primary:hover{background:#7f2115; transform:translateY(-1px);}
+  .btn-ghost{font-family:var(--mono); font-size:13px; color:var(--forest-dark); text-decoration:none; border-bottom:1px solid var(--forest-dark); padding-bottom:2px;}
+
+  /* live ledger card */
+  .ledger-card{
+    background:var(--paper-alt); border:1px solid var(--paper-line);
+    box-shadow: 6px 6px 0 rgba(20,68,47,0.08);
+    position:relative;
+  }
+  .ledger-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 20px; border-bottom:1px solid var(--paper-line);
+    font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);
+  }
+  .ledger-head .live-dot{width:6px; height:6px; border-radius:50%; background:var(--forest); display:inline-block; margin-right:6px; animation:pulse 1.8s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.3;}}
+  .ledger-body{padding:18px 20px 22px;}
+  .ledger-row{
+    display:grid; grid-template-columns:70px 1fr 100px; gap:10px;
+    font-family:var(--mono); font-size:13px; padding:9px 0;
+    border-bottom:1px dashed var(--paper-line); align-items:baseline;
+  }
+  .ledger-row .date{color:var(--muted);}
+  .ledger-row .desc{color:var(--ink);}
+  .ledger-row .amt{text-align:right;}
+  .ledger-row .amt.credit{color:var(--forest);}
+  .ledger-row .amt.debit{color:var(--red);}
+  .ledger-current{
+    display:grid; grid-template-columns:70px 1fr 100px; gap:10px;
+    font-family:var(--mono); font-size:13px; padding:9px 0 2px; align-items:baseline; min-height:20px;
+  }
+  .ledger-current .desc{white-space:nowrap; overflow:hidden; border-right:2px solid var(--ink); padding-right:2px;}
+  .ledger-stats{display:flex; gap:0; margin-top:var(--sp4); border-top:1px solid var(--paper-line);}
+  .lstat{flex:1; padding:14px 18px 0; }
+  .lstat + .lstat{border-left:1px solid var(--paper-line);}
+  .lstat .num{font-family:var(--mono); font-size:22px; font-weight:600; color:var(--forest-dark);}
+  .lstat .lbl{font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-top:4px;}
+
+  /* ---------- SECTION SCAFFOLDING ---------- */
+  section{padding:var(--sp8) 0;}
+  .divider{
+    height:26px; background-image: radial-gradient(circle, var(--paper) 4px, transparent 4.5px);
+    background-size:22px 22px; background-position:center;
+    border-top:1px dashed var(--brass); border-bottom:1px dashed var(--brass); opacity:0.55;
+  }
+  .folio-label{font-family:var(--mono); font-size:12px; color:var(--brass); letter-spacing:0.08em; margin-bottom:6px;}
+  .section-head{max-width:640px; margin-bottom:var(--sp6);}
+  .section-head h2{font-size:clamp(26px,3vw,34px); margin-bottom:10px;}
+  .section-head p{color:var(--ink-soft); font-size:15.5px;}
+
+  /* ---------- FOLIOS (product walkthrough) ---------- */
+  .folio-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:var(--sp5); margin-top:var(--sp2);}
+  @media (max-width:860px){ .folio-grid{grid-template-columns:1fr;} }
+  .folio-card{border:1px solid var(--paper-line); border-top:3px solid var(--forest); background:var(--paper-alt); padding:var(--sp5);}
+  .folio-grid .folio-card:nth-child(2){border-top-color:var(--brass);}
+  .folio-grid .folio-card:nth-child(3){border-top-color:var(--red-soft);}
+  .folio-grid .folio-card:nth-child(4){border-top-color:var(--forest);}
+  .folio-grid .folio-card:nth-child(5){border-top-color:var(--red);}
+  .folio-card .folio-label{font-family:var(--mono); font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:0.08em;}
+  .folio-card h3{font-size:20px; margin:7px 0 9px;}
+  .folio-card p.fc-desc{font-size:13.5px; color:var(--ink-soft); max-width:44ch; margin-bottom:18px;}
+  .mini-strip{display:flex; border:1px solid var(--paper-line); background:var(--paper);}
+  .mini-strip div{flex:1; padding:10px 12px;}
+  .mini-strip div+div{border-left:1px solid var(--paper-line);}
+  .mini-strip .num{font-family:var(--mono); font-size:16px; font-weight:600; color:var(--forest-dark);}
+  .mini-strip .num.warn{color:var(--red);}
+  .mini-strip .lbl{font-family:var(--mono); font-size:9px; text-transform:uppercase; color:var(--muted); letter-spacing:0.05em; margin-top:3px;}
+  .mini-drop{border:1px dashed var(--muted); padding:20px; text-align:center; font-family:var(--mono); font-size:12px; color:var(--ink-soft); background:var(--paper);}
+  .open-toggle{
+    margin-top:18px; background:none; border:none; font-family:var(--mono); font-size:12px;
+    color:var(--forest-dark); cursor:pointer; display:flex; align-items:center; gap:6px; padding:0;
+    border-bottom:1px solid transparent;
+  }
+  .open-toggle:hover{border-bottom-color:var(--forest-dark);}
+  .open-toggle .arrow{display:inline-block; transition:transform .25s; color:var(--brass);}
+  .folio-card.expanded .open-toggle .arrow{transform:rotate(180deg);}
+  .folio-expand{max-height:0; overflow:hidden; transition:max-height .45s ease;}
+  .folio-card.expanded .folio-expand{max-height:1000px;}
+  .folio-expand-inner{padding-top:20px; margin-top:18px; border-top:1px dashed var(--paper-line);}
+
+  /* ingestion demo */
+  .drop-mock{
+    background:var(--paper-alt); border:1px dashed var(--muted); padding:var(--sp5);
+    cursor:pointer; position:relative; overflow:hidden; user-select:none;
+  }
+  .drop-mock .dz-label{font-family:var(--mono); font-size:12px; color:var(--ink-soft); text-align:center; padding:var(--sp5) 0;}
+  .scan-area{position:relative; height:120px; background:#fff; border:1px solid var(--paper-line); overflow:hidden; margin-bottom:var(--sp4);}
+  .scan-area .doc-lines{position:absolute; inset:14px; display:flex; flex-direction:column; gap:8px;}
+  .scan-area .doc-lines div{height:6px; background:#E4DFCF;}
+  .scan-area .doc-lines div:nth-child(1){width:60%;}
+  .scan-area .doc-lines div:nth-child(3){width:80%;}
+  .scan-area .doc-lines div:nth-child(5){width:45%;}
+  .scan-line{
+    position:absolute; left:0; right:0; top:0; height:2px; background:var(--forest);
+    box-shadow:0 0 8px 1px rgba(20,68,47,0.6); display:none;
+  }
+  .scan-line.active{display:block; animation:sweep 1.4s linear infinite;}
+  @keyframes sweep{0%{top:0;}100%{top:100%;}}
+  .extract-list{font-family:var(--mono); font-size:12.5px;}
+  .extract-list .erow{display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed var(--paper-line); opacity:0;}
+  .extract-list .erow.show{opacity:1; animation:typeIn .3s ease-out;}
+  @keyframes typeIn{from{opacity:0; transform:translateX(-6px);}to{opacity:1; transform:translateX(0);}}
+  .stamp-note{margin-top:12px; font-family:var(--mono); font-size:11px; color:var(--forest); text-align:center; opacity:0; transition:opacity .3s;}
+  .stamp-note.show{opacity:1;}
+
+  /* approval / payout cards */
+  .approval-card{background:var(--paper); border:1px solid var(--paper-line); padding:16px 18px; margin-bottom:14px;}
+  .approval-card.resolved{opacity:0.55;}
+  .approval-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .approval-tag{font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--brass); background:rgba(169,124,47,0.12); padding:3px 8px;}
+  .approval-src{font-size:11px; color:var(--muted);}
+  .approval-title{font-family:var(--serif); font-size:16px; color:var(--forest-dark); margin-bottom:6px;}
+  .approval-amt{font-size:22px; font-weight:600; color:var(--forest-dark);}
+  .approval-due{font-size:11px; color:var(--muted); margin-top:2px;}
+  .approval-actions{display:flex; gap:10px; margin-top:14px;}
+  .btn-decline, .btn-approve{
+    font-family:var(--mono); font-size:12px; padding:9px 16px; border:1px solid var(--paper-line);
+    background:var(--paper-alt); color:var(--ink-soft); cursor:pointer; flex:1;
+  }
+  .btn-approve{background:var(--forest); color:var(--paper); border-color:var(--forest);}
+  .btn-approve:hover{background:var(--forest-dark);}
+  .btn-decline:hover{background:var(--paper-line);}
+  .approval-card.resolved .btn-decline, .approval-card.resolved .btn-approve{display:none;}
+  .approval-status{font-family:var(--mono); font-size:12px; color:var(--forest); margin-top:10px; display:none;}
+  .approval-status.show{display:block;}
+  .approval-status.declined{color:var(--red);}
+  .approval-note{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:6px; line-height:1.6; border-top:1px dashed var(--paper-line); padding-top:14px;}
+
+  /* categorization table */
+  .cat-card{background:var(--paper-alt); border:1px solid var(--paper-line);}
+  .cat-summary{display:flex; border-bottom:1px solid var(--paper-line);}
+  .cat-summary div{flex:1; padding:14px 18px; font-family:var(--mono);}
+  .cat-summary div + div{border-left:1px solid var(--paper-line);}
+  .cat-summary .num{font-size:19px; font-weight:600; color:var(--forest-dark);}
+  .cat-summary .num.warn{color:var(--red);}
+  .cat-summary .lbl{font-size:10px; text-transform:uppercase; color:var(--muted); letter-spacing:0.06em; margin-top:2px;}
+  table.cat-table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px;}
+  table.cat-table th{
+    text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted);
+    padding:10px 14px; border-bottom:1px solid var(--paper-line); font-weight:500;
+  }
+  table.cat-table td{padding:10px 14px; border-bottom:1px dashed var(--paper-line); vertical-align:middle;}
+  table.cat-table tr.review td{background:rgba(156,43,27,0.06);}
+  table.cat-table tr.review td:first-child{box-shadow:inset 3px 0 0 var(--red);}
+  .amt-cell{text-align:right;}
+  .amt-cell.credit{color:var(--forest);}
+  .amt-cell.debit{color:var(--red);}
+  .cat-pill{
+    display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:none; border:none;
+    font-family:var(--mono); font-size:12px; color:var(--ink); padding:4px 6px; border:1px solid transparent;
+  }
+  .cat-pill:hover{border-color:var(--paper-line);}
+  .conf-dot{width:7px; height:7px; border-radius:50%; flex-shrink:0;}
+  .conf-dot.high{background:var(--forest);}
+  .conf-dot.med{background:var(--brass);}
+  .conf-dot.low{background:var(--red);}
+  .conf-dot.learned{background:var(--brass);}
+  .src-tag{font-size:10px; color:var(--muted); text-transform:uppercase;}
+  .status-tag{font-size:10px; text-transform:uppercase; letter-spacing:0.04em;}
+  .status-tag.ok{color:var(--forest);}
+  .status-tag.review{color:var(--red);}
+  .status-tag.learned{color:var(--brass);}
+  .cat-dropdown{
+    position:absolute; background:var(--paper); border:1px solid var(--ink); z-index:20;
+    box-shadow:4px 4px 0 rgba(20,68,47,0.15); min-width:170px; display:none;
+  }
+  .cat-dropdown.open{display:block;}
+  .cat-dropdown button{
+    display:block; width:100%; text-align:left; background:none; border:none; padding:9px 12px;
+    font-family:var(--mono); font-size:12px; cursor:pointer; color:var(--ink);
+  }
+  .cat-dropdown button:hover{background:var(--forest); color:var(--paper);}
+  .table-scroll{overflow-x:auto;}
+
+  /* reports demo */
+  .report-card{background:var(--paper-alt); border:1px solid var(--paper-line); padding:var(--sp5);}
+  .report-row{display:flex; justify-content:space-between; font-family:var(--mono); font-size:13px; padding:8px 0; border-bottom:1px dashed var(--paper-line);}
+  .report-row.total{border-bottom:none; border-top:2px solid var(--ink); margin-top:6px; padding-top:12px; font-weight:600;}
+  .export-btn{
+    margin-top:var(--sp4); width:100%; font-family:var(--mono); font-size:12.5px; letter-spacing:0.04em;
+    background:var(--forest); color:var(--paper); border:none; padding:12px; cursor:pointer;
+  }
+  .export-btn:hover{background:var(--forest-dark);}
+  .export-confirm{
+    text-align:center; font-family:var(--mono); font-size:11px; color:var(--forest); margin-top:10px; opacity:0; transition:opacity .3s;
+  }
+  .export-confirm.show{opacity:1;}
+
+  /* ---------- HOW IT WORKS (vouchers) ---------- */
+  .vouchers{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--paper-line);}
+  @media (max-width:1000px){ .vouchers{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .vouchers{grid-template-columns:1fr;} }
+  .voucher{background:var(--paper); padding:var(--sp5) var(--sp5) var(--sp6); border-top:3px solid var(--brass);}
+  .voucher .vno{font-family:var(--mono); font-size:34px; font-weight:700; color:var(--forest); opacity:0.7;}
+  .voucher:nth-child(2) .vno{color:var(--brass);}
+  .voucher:nth-child(3) .vno{color:var(--red-soft);}
+  .voucher h4{font-family:var(--serif); font-size:19px; margin:10px 0 8px; color:var(--forest-dark);}
+  .voucher p{font-size:14px; color:var(--ink-soft);}
+
+  /* ---------- SECURITY STAMPS ---------- */
+  .stamps-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp5);}
+  @media (max-width:800px){ .stamps-grid{grid-template-columns:1fr;} }
+  .stamp-card{
+    border:1px solid var(--paper-line); padding:var(--sp5); text-align:center; background:var(--paper-alt);
+  }
+  .stamp-badge{
+    width:76px; height:76px; border-radius:50%; border:2.5px solid var(--forest); color:var(--forest);
+    background:rgba(20,68,47,0.08);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px;
+    font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.04em; text-align:center; font-weight:600;
+    transform:scale(0.6) rotate(-14deg); opacity:0; transition:transform .5s cubic-bezier(.34,1.56,.64,1), opacity .5s;
+  }
+  .stamp-badge.settle{transform:scale(1) rotate(-8deg); opacity:1;}
+  .stamp-card{border-top:3px solid var(--forest);}
+  .stamp-card:nth-child(2){border-top-color:var(--brass);}
+  .stamp-card:nth-child(2) .stamp-badge{border-color:var(--brass); color:var(--brass); background:rgba(169,124,47,0.10);}
+  .stamp-card:nth-child(3){border-top-color:var(--red-soft);}
+  .stamp-card:nth-child(3) .stamp-badge{border-color:var(--red-soft); color:var(--red-soft); background:rgba(194,84,63,0.08);}
+  .stamp-card p{font-size:14px; color:var(--ink-soft);}
+
+  /* ---------- GROWTH / TRUST STRIP ---------- */
+  .growth-grid{display:grid; grid-template-columns:1fr 1.3fr; gap:var(--sp7); align-items:center;}
+  @media (max-width:900px){ .growth-grid{grid-template-columns:1fr;} }
+  .growth-stats{display:grid; grid-template-columns:1fr 1fr; gap:var(--sp4);}
+  .growth-stat{border:1px solid var(--paper-line); background:var(--paper-alt); border-top:3px solid var(--forest); padding:16px 18px;}
+  .growth-stat:nth-child(2){border-top-color:var(--brass);}
+  .growth-stat:nth-child(3){border-top-color:var(--red-soft);}
+  .growth-stat:nth-child(4){border-top-color:var(--forest);}
+  .growth-stat .num{font-family:var(--mono); font-size:26px; font-weight:600; color:var(--forest-dark);}
+  .growth-stat .lbl{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; color:var(--muted); letter-spacing:0.05em; margin-top:4px;}
+  .growth-chart-card{background:var(--paper-alt); border:1px solid var(--paper-line); padding:var(--sp5);}
+  .growth-chart-card .gc-head{font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:16px;}
+  .gc-bars{display:flex; align-items:flex-end; gap:14px; height:150px;}
+  .gc-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .gc-col .bar{width:100%; max-width:32px; background:var(--forest); transition:height 1s ease;}
+  .gc-col:last-child .bar{background:var(--brass);}
+  .gc-col .bar-val{font-family:var(--mono); font-size:10.5px; color:var(--forest-dark); margin-bottom:4px;}
+  .gc-col .bar-lbl{font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:8px;}
+
+  /* ---------- PRICING ---------- */
+  .tariff-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp5); align-items:start;}
+  @media (max-width:900px){ .tariff-grid{grid-template-columns:1fr; max-width:420px;} }
+  .tariff-card{border:1px solid var(--paper-line); padding:var(--sp5); background:var(--paper-alt); position:relative;}
+  .tariff-card.pro{
+    border:2px solid var(--forest); background:var(--paper); box-shadow:8px 8px 0 rgba(20,68,47,0.12);
+    padding-top:calc(var(--sp5) + 14px);
+  }
+  .pro-ribbon{
+    position:absolute; top:-15px; left:var(--sp5); right:var(--sp5);
+    background:var(--forest-dark); color:var(--paper); text-align:center;
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase;
+    padding:7px 10px; font-weight:600;
+  }
+  .tariff-card .tag{font-family:var(--mono); font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:0.08em; font-weight:700;}
+  .tariff-card h3{font-size:20px; margin:8px 0 4px;}
+  .tariff-card .price{font-family:var(--mono); font-size:32px; color:var(--forest-dark); margin-bottom:4px; font-weight:600;}
+  .tariff-card .price span{font-size:13px; color:var(--muted); font-weight:400;}
+  .tariff-card .price-note{font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-bottom:16px;}
+  .tariff-card ul{list-style:none; font-size:13.5px; color:var(--ink-soft);}
+  .tariff-card li{padding:8px 0; border-bottom:1px solid var(--paper-line);}
+  .tariff-card li strong{color:var(--forest-dark);}
+  .tariff-cta{
+    display:block; width:100%; text-align:center; font-family:var(--mono); font-size:13px; letter-spacing:0.02em;
+    padding:12px; margin-top:18px; text-decoration:none; border:1.5px solid var(--forest); color:var(--forest-dark);
+    background:transparent; cursor:pointer;
+  }
+  .tariff-cta:hover{background:rgba(20,68,47,0.06);}
+  .tariff-cta.solid{background:var(--forest-dark); color:var(--paper); border-color:var(--forest-dark);}
+  .tariff-cta.solid:hover{background:var(--forest);}
+  .tariff-note{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:20px;}
+  .billing-toggle{display:inline-flex; border:1px solid var(--paper-line); margin-bottom:var(--sp5); background:var(--paper-alt);}
+  .billing-toggle button{font-family:var(--mono); font-size:12px; padding:9px 18px; border:none; background:none; color:var(--ink-soft); cursor:pointer;}
+  .billing-toggle button.active{background:var(--forest); color:var(--paper);}
+  .billing-toggle .save-tag{font-size:10px; color:var(--brass); margin-left:4px;}
+  .price-monthly, .price-yearly{display:none;}
+  .price-monthly.show, .price-yearly.show{display:block;}
+  .yearly-note{display:none;}
+  .yearly-note.show{display:block;}
+
+  /* ---------- FOOTER ---------- */
+  footer{padding:var(--sp7) 0 var(--sp6); border-top:1px solid var(--paper-line);}
+  .foot-grid{display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:var(--sp5);}
+  .foot-tag{font-family:var(--serif); font-size:20px; color:var(--forest-dark);}
+  .foot-sub{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:6px;}
+  .foot-cols{display:flex; justify-content:space-between; gap:var(--sp6); flex-wrap:wrap; padding-bottom:var(--sp6); margin-bottom:var(--sp5); border-bottom:1px solid var(--paper-line);}
+  .foot-col-label{font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--brass); margin-bottom:12px;}
+  .foot-col a, .foot-col .foot-line{display:block; font-family:var(--sans); font-size:13.5px; color:var(--ink-soft); text-decoration:none; margin-bottom:8px;}
+  .foot-col a:hover{color:var(--forest-dark); text-decoration:underline;}
+  .foot-disclaimer{font-family:var(--mono); font-size:10.5px; color:var(--muted); max-width:64ch; margin-top:var(--sp4); line-height:1.6;}
+  .trust-strip{display:flex; gap:var(--sp5); flex-wrap:wrap; margin-top:14px;}
+  .trust-chip{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.03em;}
+  .trust-chip .dot{width:5px; height:5px; border-radius:50%; background:var(--forest);}
+
+  /* ---------- ANNOUNCEMENT BAR ---------- */
+  .announce{
+    background:var(--forest-dark); color:var(--paper);
+    text-align:center; padding:9px 16px;
+    font-family:var(--mono); font-size:11.5px; letter-spacing:0.03em;
+  }
+  .announce strong{color:var(--brass); font-weight:600;}
+  @media (max-width:600px){ .announce{font-size:10.5px; padding:8px 10px;} }
+
+  /* ---------- UNIQUE-VALUE TAG (hero) ---------- */
+  .unique-tag{
+    display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12.5px;
+    color:var(--forest-dark); background:var(--paper-alt); border:1px dashed var(--brass);
+    padding:8px 14px; margin-bottom:var(--sp4);
+  }
+
+  /* ---------- FILING SEASON / COUNTDOWN ---------- */
+  .yearend{background:var(--forest-dark);}
+  .yearend .eyebrow{color:#B9CFC0;}
+  .yearend .eyebrow::before{background:#B9CFC0;}
+  .yearend h2{color:var(--paper);}
+  .yearend .section-head p{color:#CBDDD2;}
+  .yearend-grid{display:grid; grid-template-columns:1fr 0.85fr; gap:var(--sp7); align-items:center;}
+  @media (max-width:900px){ .yearend-grid{grid-template-columns:1fr;} }
+  .yearend-list{list-style:none; margin-top:var(--sp4);}
+  .yearend-list li{
+    display:flex; align-items:baseline; gap:10px; padding:9px 0; border-bottom:1px dashed rgba(255,255,255,0.15);
+    color:#DCE9E1; font-size:14.5px;
+  }
+  .yearend-list li::before{content:'✓'; color:var(--brass); font-family:var(--mono); font-weight:600;}
+  .countdown-card{
+    background:var(--forest); border:1px solid rgba(255,255,255,0.12);
+    box-shadow:6px 6px 0 rgba(0,0,0,0.15); padding:var(--sp5) var(--sp5) var(--sp4); text-align:center;
+  }
+  .countdown-card .cd-label{font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#B9CFC0; margin-bottom:14px;}
+  .countdown-digits{display:flex; justify-content:center; gap:14px;}
+  .cd-unit{min-width:64px;}
+  .cd-unit .cd-num{font-family:var(--mono); font-size:34px; font-weight:600; color:var(--paper);}
+  .cd-unit .cd-sub{font-family:var(--mono); font-size:10px; color:#B9CFC0; text-transform:uppercase; letter-spacing:0.06em; margin-top:2px;}
+  .countdown-card .cd-note{font-family:var(--mono); font-size:11.5px; color:#CBDDD2; margin-top:16px; padding-top:14px; border-top:1px dashed rgba(255,255,255,0.15);}
+  .countdown-card .cd-cta{
+    display:inline-block; margin-top:16px; font-family:var(--mono); font-size:12.5px;
+    background:var(--brass); color:var(--forest-dark); padding:11px 20px; text-decoration:none; font-weight:600;
+  }
+  .countdown-card .cd-cta:hover{background:#c2954a;}
+
+  /* ---------- FAQ ACCORDION ---------- */
+  .faq-list{max-width:760px;}
+  .faq-item{border-bottom:1px solid var(--paper-line);}
+  .faq-q{
+    width:100%; text-align:left; background:none; border:none; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; gap:var(--sp4);
+    padding:18px 0; font-family:var(--serif); font-size:16.5px; color:var(--forest-dark); font-weight:600;
+  }
+  .faq-q .plus{font-family:var(--mono); font-size:18px; color:var(--brass); transition:transform .25s; flex-shrink:0;}
+  .faq-item.open .faq-q .plus{transform:rotate(45deg);}
+  .faq-a{max-height:0; overflow:hidden; transition:max-height .3s ease;}
+  .faq-a p{color:var(--ink-soft); font-size:14.5px; padding-bottom:18px; max-width:58ch;}
+
+  /* ---------- FAQ: floating question chips ---------- */
+  #faq{position:relative; overflow:hidden;}
+  .faq-float-layer{position:absolute; inset:0; pointer-events:none; z-index:0;}
+  .faq-float{
+    position:absolute; display:flex; align-items:center; gap:7px;
+    background:var(--paper-alt); border:1px solid var(--paper-line);
+    padding:7px 12px; max-width:158px;
+    font-family:var(--mono); font-size:10.5px; color:var(--muted); line-height:1.3;
+    opacity:0; transform:translateY(8px); will-change:transform, opacity;
+    transition:opacity .7s ease-out, transform .7s ease-out;
+  }
+  .faq-float.settle{opacity:0.85; transform:translateY(0);}
+  .faq-float .qm{font-family:var(--serif); font-weight:700; font-size:13px; flex-shrink:0; color:var(--forest); opacity:0.7;}
+  .faq-float.c-red{border-color:var(--red-soft);}
+  .faq-float.c-red .qm{color:var(--red);}
+  .faq-float.c-brass{border-color:var(--brass);}
+  .faq-float.c-brass .qm{color:var(--brass);}
+  .faq-float.c-forest{border-color:var(--forest);}
+  .faq-float.c-forest .qm{color:var(--forest-dark);}
+  .f1{top:22%; left:1.5vw;}
+  .f2{top:38%; right:2vw;}
+  .f3{top:62%; left:0.5vw;}
+  .f4{top:80%; right:1vw;}
+  @media (max-width:1150px){ .faq-float-layer{display:none;} }
+
+  /* ---------- SMALL PHONE TIGHTENING ---------- */
+  @media (max-width:430px){
+    .nav-inner{padding:0 var(--sp3);}
+    .nav-cta{padding:8px 12px; font-size:10.5px;}
+    .wordmark{font-size:17px;}
+    .wrap{padding:0 var(--sp3);}
+    .mini-strip div, .cat-summary div{padding:9px 8px;}
+    .mini-strip .num, .cat-summary .num{font-size:13.5px;}
+    .mini-strip .lbl, .cat-summary .lbl{font-size:8px; letter-spacing:0.02em;}
+    .lstat{padding:12px 10px 0;}
+    .lstat .num{font-size:17px;}
+    .lstat .lbl{font-size:8.5px;}
+    .countdown-digits{gap:8px;}
+    .cd-unit{min-width:50px;}
+    .cd-unit .cd-num{font-size:26px;}
+  }
+
+  /* toast */
+  #toast{
+    position:fixed; bottom:24px; right:24px; background:var(--forest-dark); color:var(--paper);
+    font-family:var(--mono); font-size:12.5px; padding:13px 18px; max-width:280px;
+    transform:translateY(20px); opacity:0; transition:transform .3s, opacity .3s; z-index:100;
+    border-left:3px solid var(--brass);
+  }
+  #toast.show{transform:translateY(0); opacity:1;}
+
+  /* reveal on scroll */
+  .reveal{opacity:0; transform:translateY(14px); transition:opacity .6s ease-out, transform .6s ease-out;}
+  .reveal.in{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="announce">The only Pakistani freelance ledger that <strong>totals your income, tracks what clients still owe — and reminds them for you</strong>.</div>
+
+<nav>
+  <div class="nav-inner">
+    <div class="wordmark"><img src="data:image/png;base64,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" alt="Munshi logo">MUNSHI<span class="dot">.</span></div>
+    <div class="tabs">
+      <a href="#register">Register</a>
+      <a href="#how">How it works</a>
+      <a href="#security">Security</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="privacy.html">Privacy</a>
+    </div>
+    <a class="nav-cta" href="munshi-login.html">Open your ledger</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <div class="eyebrow">Folio No. 001 — Income, Dues &amp; Bookkeeping, Pakistan</div>
+      <h1>Always know what you made,<br>what's left, <em>and who still owes you</em>.</h1>
+      <div class="unique-tag">✓ Forward it — that's the whole step. No new app, no manual entry, ever.</div>
+      <p class="hero-sub">Munshi reads your Payoneer statements and WhatsApp payments, keeps a running ledger, and tracks what every client still owes — filing-ready summaries come for free, whenever you need them.</p>
+      <div class="hero-ctas">
+        <a class="btn-primary" href="#pricing">Open your ledger →</a>
+        <a class="btn-ghost" href="#register">See the register</a>
+      </div>
+    </div>
+
+    <div class="ledger-card">
+      <div class="ledger-head">
+        <span><span class="live-dot"></span>Live Register</span>
+        <span>Aug 2026</span>
+      </div>
+      <div class="ledger-body" id="heroLedger">
+        <!-- rows injected by JS -->
+        <div class="ledger-current" id="ledgerCurrent">
+          <span class="date mono"></span><span class="desc mono"></span><span class="amt mono"></span>
+        </div>
+      </div>
+      <div class="ledger-stats">
+        <div class="lstat"><div class="num" data-count="384260">0</div><div class="lbl">Left after spend, PKR</div></div>
+        <div class="lstat"><div class="num" data-count="2">0</div><div class="lbl">Clients still owing</div></div>
+        <div class="lstat"><div class="num" data-count="42">0</div><div class="lbl">Days to filing</div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="divider"></div>
+
+<section id="register">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">The Register</div>
+      <h2>Four screens a freelancer actually opens.</h2>
+      <p>Tap any folio to open it up — the same screens from the real product, not a marketing simplification of them.</p>
+    </div>
+
+    <div class="folio-grid">
+
+      <!-- FOLIO 01: OVERVIEW -->
+      <div class="folio-card reveal">
+        <div class="folio-label">Folio 01 — Overview</div>
+        <h3>The Sunday-night page.</h3>
+        <p class="fc-desc">One page, checked once a week — income so far, what's still uncategorized, and who still owes you.</p>
+        <div class="mini-strip">
+          <div><div class="num" data-count="397700">0</div><div class="lbl">Income, Aug</div></div>
+          <div><div class="num warn" data-count="1">0</div><div class="lbl">Needs review</div></div>
+          <div><div class="num" data-count="2">0</div><div class="lbl">Clients owing</div></div>
+        </div>
+        <button class="open-toggle" data-target="expand-1">Open this screen <span class="arrow">▾</span></button>
+        <div class="folio-expand" id="expand-1">
+          <div class="folio-expand-inner">
+            <div class="ledger-stats" style="margin-top:0; border-top:1px solid var(--paper-line);">
+              <div class="lstat"><div class="num" data-count="397700">0</div><div class="lbl">Income, PKR</div></div>
+              <div class="lstat"><div class="num warn" data-count="1">0</div><div class="lbl">Needs review</div></div>
+              <div class="lstat"><div class="num" data-count="34000">0</div><div class="lbl">Owed by clients</div></div>
+            </div>
+            <div style="margin-top:18px;">
+              <div class="ledger-row"><span class="date mono">15 Aug</span><span class="desc mono">WhatsApp — Client retainer</span><span class="amt mono credit">PKR 60,000</span></div>
+              <div class="ledger-row"><span class="date mono">14 Aug</span><span class="desc mono">Wise — Figma Subscription</span><span class="amt mono debit">– PKR 3,200</span></div>
+              <div class="ledger-row" style="border-bottom:none;"><span class="date mono">12 Aug</span><span class="desc mono">Bank — LESCO Electricity</span><span class="amt mono debit">– PKR 8,400</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FOLIO 02: INGESTION -->
+      <div class="folio-card reveal">
+        <div class="folio-label">Folio 02 — Statement ingestion</div>
+        <h3>It reads what you already send.</h3>
+        <p class="fc-desc">Drop a Payoneer PDF or a WhatsApp payment screenshot. Munshi does the rest — no manual entry.</p>
+        <div class="mini-drop">Drop a statement or screenshot →</div>
+        <button class="open-toggle" data-target="expand-2">Open this screen <span class="arrow">▾</span></button>
+        <div class="folio-expand" id="expand-2">
+          <div class="folio-expand-inner">
+            <div class="drop-mock" id="dropMock">
+              <div class="scan-area">
+                <div class="doc-lines"><div></div><div></div><div></div><div></div><div></div></div>
+                <div class="scan-line" id="scanLine"></div>
+              </div>
+              <div class="dz-label" id="dzLabel">Click to drop a statement or screenshot →</div>
+              <div class="extract-list" id="extractList"></div>
+              <div class="stamp-note" id="stampNote">4 entries extracted, folio 02</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FOLIO 03: CATEGORIZATION -->
+      <div class="folio-card reveal">
+        <div class="folio-label">Folio 03 — Categorization</div>
+        <h3>It categorizes, and it learns.</h3>
+        <p class="fc-desc">Correct a category once — Munshi remembers that merchant for good, so you stop re-teaching it every month.</p>
+        <div class="mini-strip">
+          <div><div class="num" data-count="7">0</div><div class="lbl">Categorized</div></div>
+          <div><div class="num warn" data-count="1">0</div><div class="lbl">Needs review</div></div>
+        </div>
+        <button class="open-toggle" data-target="expand-3">Open this screen <span class="arrow">▾</span></button>
+        <div class="folio-expand" id="expand-3">
+          <div class="folio-expand-inner">
+            <div class="cat-card">
+              <div class="cat-summary">
+                <div><div class="num" data-count="397700">0</div><div class="lbl">Income, PKR</div></div>
+                <div><div class="num" data-count="385700">0</div><div class="lbl">Categorized, PKR</div></div>
+                <div><div class="num warn" data-count="12000">0</div><div class="lbl">Needs review, PKR</div></div>
+              </div>
+              <div class="table-scroll">
+              <table class="cat-table" id="catTable">
+                <thead><tr>
+                  <th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th>Category</th><th>Source</th><th>Status</th>
+                </tr></thead>
+                <tbody>
+                  <!-- rows injected by JS -->
+                </tbody>
+              </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FOLIO 04: REPORTS -->
+      <div class="folio-card reveal">
+        <div class="folio-label">Folio 04 — Reports &amp; export</div>
+        <h3>It closes the books, on demand.</h3>
+        <p class="fc-desc">Category totals that reconcile on their own, formatted the way FBR expects — export it and hand it off.</p>
+        <div class="mini-strip">
+          <div><div class="num" data-count="384260">0</div><div class="lbl">Net, Aug</div></div>
+        </div>
+        <button class="open-toggle" data-target="expand-4">Open this screen <span class="arrow">▾</span></button>
+        <div class="folio-expand" id="expand-4">
+          <div class="folio-expand-inner">
+            <div class="report-card" style="padding:0; border:none; background:none;">
+              <div class="report-row"><span>Client income</span><span class="mono">PKR 397,700</span></div>
+              <div class="report-row"><span>Platform fees</span><span class="mono">– PKR 1,840</span></div>
+              <div class="report-row"><span>Utilities</span><span class="mono">– PKR 8,400</span></div>
+              <div class="report-row"><span>Software &amp; tools</span><span class="mono">– PKR 3,200</span></div>
+              <div class="report-row total"><span>Net income</span><span class="mono">PKR 384,260</span></div>
+              <button class="export-btn" id="exportBtn">Export FBR summary</button>
+              <div class="export-confirm" id="exportConfirm">✓ Summary exported — Aug 2026, folio 04</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FOLIO 05: APPROVALS & PAYOUTS -->
+      <div class="folio-card reveal">
+        <div class="folio-label">Folio 05 — Approvals &amp; payouts</div>
+        <h3>Nothing moves without your yes.</h3>
+        <p class="fc-desc">A bill comes in, or a client is owed a refund — Munshi asks first. You approve, then it pays, through a licensed payment rail (Raast / JazzCash / Easypaisa).</p>
+        <div class="mini-strip">
+          <div><div class="num warn" data-count="2">0</div><div class="lbl">Awaiting approval</div></div>
+        </div>
+        <button class="open-toggle" data-target="expand-5">Open this screen <span class="arrow">▾</span></button>
+        <div class="folio-expand" id="expand-5">
+          <div class="folio-expand-inner">
+
+            <div class="approval-card" id="approvalBill">
+              <div class="approval-head">
+                <span class="approval-tag">Bill detected</span>
+                <span class="approval-src mono">LESCO — via forwarded bill</span>
+              </div>
+              <div class="approval-body">
+                <div class="approval-title">LESCO Electricity Bill</div>
+                <div class="approval-amt mono">PKR 8,400</div>
+                <div class="approval-due mono">Due 28 Aug 2026</div>
+              </div>
+              <div class="approval-actions">
+                <button class="btn-decline" data-approval="approvalBill">Decline</button>
+                <button class="btn-approve" data-approval="approvalBill">Approve &amp; Pay</button>
+              </div>
+              <div class="approval-status" id="statusBill"></div>
+            </div>
+
+            <div class="approval-card" id="approvalPayout">
+              <div class="approval-head">
+                <span class="approval-tag">Client payout due</span>
+                <span class="approval-src mono">Refund — Bright Studio LLC</span>
+              </div>
+              <div class="approval-body">
+                <div class="approval-title">Send to client's bank account</div>
+                <div class="approval-amt mono">PKR 15,000</div>
+                <div class="approval-due mono">Account on file: •••• 4471</div>
+              </div>
+              <div class="approval-actions">
+                <button class="btn-decline" data-approval="approvalPayout">Decline</button>
+                <button class="btn-approve" data-approval="approvalPayout">Approve &amp; Send</button>
+              </div>
+              <div class="approval-status" id="statusPayout"></div>
+            </div>
+
+            <div class="approval-note">This is a working demo of the flow only — real transfers need Munshi to be connected through a licensed payment partner first. Nothing here moves real money yet.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Voucher Sequence</div>
+      <h2>Four vouchers to your first closed month.</h2>
+    </div>
+  </div>
+  <div class="vouchers wrap" style="max-width:1180px; margin:0 auto;">
+    <div class="voucher reveal"><div class="vno">01</div><h4>Connect</h4><p>Forward a statement or screenshot the moment a payment lands — no separate app to open.</p></div>
+    <div class="voucher reveal"><div class="vno">02</div><h4>Read</h4><p>Munshi extracts and categorizes each entry in seconds, and flags anything it isn't sure about.</p></div>
+    <div class="voucher reveal"><div class="vno">03</div><h4>Reconcile</h4><p>Categories add up on their own, and every client's balance stays current — export it whenever you actually need it.</p></div>
+    <div class="voucher reveal"><div class="vno">04</div><h4>Follow up</h4><p>See which clients are past their due date, and send the drafted reminder — no chasing from memory.</p></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="yearend">
+  <div class="wrap yearend-grid">
+    <div class="reveal">
+      <div class="eyebrow">One More Thing It Does</div>
+      <h2>And when September comes, you're already done.</h2>
+      <p>No scramble at year end. Every entry you forwarded all year is already categorized and reconciled, so filing is one export, not a week of digging through statements.</p>
+      <ul class="yearend-list">
+        <li>Every Payoneer, Wise and WhatsApp payment already logged</li>
+        <li>Categories reconciled month by month, not all at once</li>
+        <li>Every client's due date tracked, reminders drafted the moment they're late</li>
+        <li>One-click FBR-ready summary, for any period you need</li>
+      </ul>
+    </div>
+    <div class="countdown-card reveal">
+      <div class="cd-label">Time left to file, this year</div>
+      <div class="countdown-digits">
+        <div class="cd-unit"><div class="cd-num" id="cdDays">--</div><div class="cd-sub">Days</div></div>
+        <div class="cd-unit"><div class="cd-num" id="cdHours">--</div><div class="cd-sub">Hours</div></div>
+        <div class="cd-unit"><div class="cd-num" id="cdMins">--</div><div class="cd-sub">Mins</div></div>
+      </div>
+      <div class="cd-note">Munshi users are usually export-ready weeks before this.</div>
+      <a class="cd-cta" href="#pricing">Get ahead of it →</a>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="growth">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Growing folio</div>
+      <h2>Real books, added every week.</h2>
+    </div>
+    <div class="growth-grid">
+      <div class="growth-stats">
+        <div class="growth-stat reveal"><div class="num">612</div><div class="lbl">Businesses on Munshi</div></div>
+        <div class="growth-stat reveal"><div class="num">1,840</div><div class="lbl">Clients tracked, total</div></div>
+        <div class="growth-stat reveal"><div class="num">PKR 18.4M</div><div class="lbl">Logged this month</div></div>
+        <div class="growth-stat reveal"><div class="num">+38</div><div class="lbl">New ledgers this month</div></div>
+      </div>
+      <div class="growth-chart-card reveal">
+        <div class="gc-head">Businesses on Munshi — last 6 months</div>
+        <div class="gc-bars" id="growthChart"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="security">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Your Data, Protected</div>
+      <h2>Trusted with the numbers, not just the app.</h2>
+    </div>
+    <div class="stamps-grid">
+      <div class="stamp-card reveal">
+        <div class="stamp-badge">Sealed</div>
+        <p>Raw statements are never stored — only the extracted, encrypted data.</p>
+      </div>
+      <div class="stamp-card reveal">
+        <div class="stamp-badge">Private</div>
+        <p>Only you can see your numbers. Even we can't, without your access.</p>
+      </div>
+      <div class="stamp-card reveal">
+        <div class="stamp-badge">FBR Ready</div>
+        <p>Built for FBR from day one — export-ready, not retrofitted later.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="pricing">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Tariff</div>
+      <h2>Honest pricing, in dollars.</h2>
+    </div>
+    <div class="billing-toggle reveal">
+      <button class="active" id="btnMonthly" onclick="setBilling('monthly')">Monthly</button>
+      <button id="btnYearly" onclick="setBilling('yearly')">Yearly <span class="save-tag">2 months free</span></button>
+    </div>
+    <div class="tariff-grid">
+      <div class="tariff-card reveal">
+        <div class="tag">Starter</div>
+        <h3>Khata</h3>
+        <div class="price">$0</div>
+        <div class="price-note">forever, no card required</div>
+        <ul>
+          <li>Up to <strong>25 transactions</strong>/month</li>
+          <li>Payoneer &amp; Wise statement reading</li>
+          <li>WhatsApp screenshot ingestion</li>
+          <li>Monthly summary export (PDF)</li>
+        </ul>
+        <button class="tariff-cta" onclick="location.href='munshi-signup.html?plan=free'">Start free</button>
+      </div>
+      <div class="tariff-card pro reveal">
+        <div class="pro-ribbon">Most freelancers pick this</div>
+        <div class="tag">Freelancer</div>
+        <h3>Munshi Pro</h3>
+        <div class="price price-monthly show">$10 <span>/ month</span></div>
+        <div class="price price-yearly">$8 <span>/ month</span></div>
+        <div class="price-note price-note-monthly">billed monthly, cancel anytime · ~PKR 2,800</div>
+        <div class="price-note yearly-note">billed $100/year · ~PKR 28,000</div>
+        <ul>
+          <li>Unlimited transactions</li>
+          <li>Merchant-learning categorization</li>
+          <li>Client due-date tracking &amp; drafted reminders</li>
+          <li>Multi-currency reconciliation</li>
+          <li>FBR-ready quarterly exports</li>
+        </ul>
+        <button class="tariff-cta solid" onclick="goSignup('pro')">Request early access</button>
+      </div>
+      <div class="tariff-card reveal">
+        <div class="tag">Small Business</div>
+        <h3>Munshi Teams</h3>
+        <div class="price price-monthly show">$30 <span>/ month</span></div>
+        <div class="price price-yearly">$25 <span>/ month</span></div>
+        <div class="price-note price-note-monthly">owner + up to 4 team members · ~PKR 8,400</div>
+        <div class="price-note yearly-note">billed $300/year · owner + up to 4 team members</div>
+        <ul>
+          <li>Everything in Freelancer</li>
+          <li>Owner sees every member's ledger</li>
+          <li>Members' data stays private from each other</li>
+          <li>Accountant hand-off view</li>
+          <li>Priority statement processing</li>
+        </ul>
+        <button class="tariff-cta" onclick="goSignup('teams')">Talk to us</button>
+      </div>
+    </div>
+    <div class="tariff-note reveal">No setup fee. No lock-in. Cancel anytime — your ledger exports with you. Prices shown in USD; billed in PKR at the daily rate for Pakistani cards.</div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="faq">
+  <div class="faq-float-layer" aria-hidden="true">
+    <div class="faq-float f1 c-forest"><span class="qm">?</span>Works with slow internet?</div>
+    <div class="faq-float f2 c-brass"><span class="qm">?</span>Support in Urdu?</div>
+    <div class="faq-float f3 c-forest"><span class="qm">?</span>Team access for my accountant?</div>
+    <div class="faq-float f4 c-brass"><span class="qm">?</span>Export as Excel or PDF?</div>
+  </div>
+  <div class="wrap" style="position:relative; z-index:1;">
+    <div class="section-head reveal">
+      <div class="eyebrow">Questions</div>
+      <h2>Before you forward your first statement.</h2>
+    </div>
+    <div class="faq-list" style="position:relative; background:var(--paper); z-index:1;">
+      <div class="faq-item">
+        <button class="faq-q"><span>Do I have to type anything in manually?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>No — that's the whole point. Forward the PDF or screenshot the moment you're paid, and Munshi reads and categorizes it. You only open the app to review the odd flagged entry.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>What if it gets a category wrong?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Correct it once from the dropdown. Munshi remembers that merchant permanently, so the same correction never has to be made twice.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>How do the client payment reminders work?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Each client entry carries the date they agreed to pay. Once that date passes, Munshi drafts a reminder message with their name, the amount owed, and how many days overdue — you just review and send it.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>Is my financial data safe?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Raw statements are never stored — only the extracted, encrypted entries. Nobody at Munshi can see your numbers without your access.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>Does it help at tax time too?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Yes — but that's a bonus, not the main job. Because everything's already categorized and reconciled all year, exporting an FBR-ready summary is one click, any time you need it.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>Can I switch plans later?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Yes, anytime — and your full ledger history moves with you. There's no lock-in and no setup fee either way.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-cols">
+      <div class="foot-col" style="max-width:280px;">
+        <div class="foot-tag" style="display:flex; align-items:center; gap:9px;"><img src="data:image/png;base64,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" alt="Munshi logo" style="width:30px;height:31px;border-radius:7px;object-fit:cover;">Munshi<span style="color:var(--red);">.</span></div>
+        <div class="foot-sub" style="margin-top:8px;">Made in Pakistan, for Pakistani freelancers.</div>
+        <div class="trust-strip">
+          <div class="trust-chip"><span class="dot"></span>256-bit encrypted</div>
+          <div class="trust-chip"><span class="dot"></span>Raw statements never stored</div>
+        </div>
+      </div>
+      <div class="foot-col">
+        <div class="foot-col-label">Product</div>
+        <a href="#register">Register</a>
+        <a href="#how">How it works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="foot-col">
+        <div class="foot-col-label">Legal</div>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+        <span class="foot-line">Registered with SECP, Pakistan</span>
+      </div>
+      <div class="foot-col">
+        <div class="foot-col-label">Contact</div>
+        <a href="mailto:support@munshi.app">support@munshi.app</a>
+        <a href="https://wa.me/923001234567" target="_blank" rel="noopener" class="foot-line" style="text-decoration:underline;">WhatsApp: +92 300 1234567</a>
+        <span class="foot-line">Lahore, Pakistan</span>
+      </div>
+    </div>
+    <div class="wrap foot-grid" style="padding:0;">
+      <div class="foot-disclaimer">Munshi is a bookkeeping and record-keeping tool. It is not a bank, is not licensed to hold or move funds, and never asks for your online banking password. All data comes from statements and screenshots you choose to forward.</div>
+      <div class="foot-sub mono">© 2026 Munshi. Folio closed. <a href="munshi-superadmin.html" style="color:var(--muted); text-decoration:none;">·&nbsp;Staff</a></div>
+    </div>
+  </div>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+// ---------- scroll reveal ----------
+const revealEls = document.querySelectorAll('.reveal');
+const revealObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); revealObserver.unobserve(e.target); } });
+},{threshold:0.15});
+revealEls.forEach(el=>revealObserver.observe(el));
+
+// ---------- count up ----------
+function countUp(el, target){
+  const isMoney = target > 999;
+  let start = 0; const dur = 1100; const t0 = performance.now();
+  function step(t){
+    const p = Math.min((t-t0)/dur, 1);
+    const eased = 1 - Math.pow(1-p, 3);
+    const val = Math.round(target * eased);
+    el.textContent = isMoney ? val.toLocaleString('en-PK') : val;
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+const countEls = document.querySelectorAll('[data-count]');
+const countObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      countUp(e.target, parseInt(e.target.dataset.count,10));
+      countObserver.unobserve(e.target);
+    }
+  });
+},{threshold:0.4});
+countEls.forEach(el=>countObserver.observe(el));
+
+// ---------- billing toggle ----------
+let currentBilling='monthly';
+function setBilling(mode){
+  currentBilling=mode;
+  document.getElementById('btnMonthly').classList.toggle('active', mode==='monthly');
+  document.getElementById('btnYearly').classList.toggle('active', mode==='yearly');
+  document.querySelectorAll('.price-monthly').forEach(el=>el.classList.toggle('show', mode==='monthly'));
+  document.querySelectorAll('.price-yearly').forEach(el=>el.classList.toggle('show', mode==='yearly'));
+  document.querySelectorAll('.price-note-monthly').forEach(el=>el.style.display = mode==='monthly'?'block':'none');
+  document.querySelectorAll('.yearly-note').forEach(el=>el.classList.toggle('show', mode==='yearly'));
+}
+function goSignup(plan){ location.href = 'munshi-signup.html?plan='+plan+'&cycle='+currentBilling; }
+
+// ---------- growth chart ----------
+(function(){
+  const data=[{m:'Mar',v:441},{m:'Apr',v:479},{m:'May',v:512},{m:'Jun',v:548},{m:'Jul',v:574},{m:'Aug',v:612}];
+  const max=Math.max(...data.map(d=>d.v));
+  const wrap=document.getElementById('growthChart');
+  if(wrap){
+    data.forEach(d=>{
+      const col=document.createElement('div'); col.className='gc-col';
+      const h=Math.round((d.v/max)*120);
+      col.innerHTML=`<div class="bar-val">${d.v}</div><div class="bar" style="height:0px;"></div><div class="bar-lbl">${d.m}</div>`;
+      wrap.appendChild(col);
+    });
+    const chartObserver = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{
+        if(e.isIntersecting){
+          wrap.querySelectorAll('.bar').forEach((b,i)=>{
+            const h=Math.round((data[i].v/max)*120);
+            setTimeout(()=>{ b.style.height=h+'px'; }, i*100);
+          });
+          chartObserver.unobserve(e.target);
+        }
+      });
+    },{threshold:0.3});
+    chartObserver.observe(wrap);
+  }
+})();
+
+// ---------- stamp settle animation ----------
+const stampEls = document.querySelectorAll('.stamp-badge');
+const stampObserver = new IntersectionObserver((entries)=>{
+  entries.forEach((e,i)=>{
+    if(e.isIntersecting){
+      setTimeout(()=>e.target.classList.add('settle'), i*120);
+      stampObserver.unobserve(e.target);
+    }
+  });
+},{threshold:0.4});
+stampEls.forEach(el=>stampObserver.observe(el));
+
+// ---------- folio card expand/collapse ----------
+document.querySelectorAll('.open-toggle').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const card = btn.closest('.folio-card');
+    const wasExpanded = card.classList.contains('expanded');
+    card.classList.toggle('expanded');
+    const label = btn.childNodes[0];
+    label.textContent = wasExpanded ? 'Open this screen ' : 'Close this screen ';
+    if(!wasExpanded){
+      const target = document.getElementById(btn.dataset.target);
+      target.querySelectorAll('[data-count]').forEach(el=>{
+        if(!el.dataset.counted){
+          el.dataset.counted = '1';
+          countUp(el, parseInt(el.dataset.count,10));
+        }
+      });
+    }
+  });
+});
+
+// ---------- hero live ledger loop ----------
+const heroEntries = [
+  {date:'12 Aug', desc:'Payoneer — Bright Studio LLC', amt:'PKR 184,500', credit:true},
+  {date:'13 Aug', desc:'Wise — NovaTech Inc', amt:'PKR 96,200', credit:true},
+  {date:'14 Aug', desc:'LESCO — Electricity', amt:'– PKR 8,400', credit:false},
+  {date:'15 Aug', desc:'WhatsApp — Client retainer', amt:'PKR 60,000', credit:true},
+];
+const ledgerBody = document.getElementById('heroLedger');
+const currentRow = document.getElementById('ledgerCurrent');
+let heroIdx = 0;
+let pastRows = [];
+
+function renderPastRows(){
+  const existing = ledgerBody.querySelectorAll('.ledger-row');
+  existing.forEach(r=>r.remove());
+  pastRows.slice(-3).forEach(r=>{
+    const div = document.createElement('div');
+    div.className = 'ledger-row';
+    div.innerHTML = `<span class="date">${r.date}</span><span class="desc">${r.desc}</span><span class="amt ${r.credit?'credit':'debit'}">${r.amt}</span>`;
+    ledgerBody.insertBefore(div, currentRow);
+  });
+}
+
+function typeCurrent(entry, cb){
+  const descEl = currentRow.querySelector('.desc');
+  const dateEl = currentRow.querySelector('.date');
+  const amtEl = currentRow.querySelector('.amt');
+  dateEl.textContent = entry.date;
+  amtEl.textContent = '';
+  amtEl.className = 'amt mono';
+  descEl.textContent = '';
+  let i = 0;
+  const iv = setInterval(()=>{
+    descEl.textContent = entry.desc.slice(0,i+1);
+    i++;
+    if(i > entry.desc.length){
+      clearInterval(iv);
+      amtEl.textContent = entry.amt;
+      amtEl.classList.add(entry.credit?'credit':'debit');
+      if(cb) setTimeout(cb, 1400);
+    }
+  }, 28);
+}
+
+function heroLoop(){
+  const entry = heroEntries[heroIdx % heroEntries.length];
+  typeCurrent(entry, ()=>{
+    pastRows.push(entry);
+    renderPastRows();
+    heroIdx++;
+    setTimeout(heroLoop, 600);
+  });
+}
+heroLoop();
+
+// ---------- ingestion demo ----------
+const dropMock = document.getElementById('dropMock');
+const scanLine = document.getElementById('scanLine');
+const dzLabel = document.getElementById('dzLabel');
+const extractList = document.getElementById('extractList');
+const stampNote = document.getElementById('stampNote');
+const extracted = [
+  {d:'03 Aug', desc:'Payoneer Payout', a:'PKR 184,500'},
+  {d:'05 Aug', desc:'Wise Transfer', a:'PKR 96,200'},
+  {d:'07 Aug', desc:'WhatsApp — Cash', a:'PKR 12,000'},
+  {d:'09 Aug', desc:'Bank — LESCO', a:'– PKR 8,400'},
+];
+let ingestRunning = false;
+dropMock.addEventListener('click', ()=>{
+  if(ingestRunning) return;
+  ingestRunning = true;
+  extractList.innerHTML = '';
+  stampNote.classList.remove('show');
+  dzLabel.textContent = 'Reading statement…';
+  scanLine.classList.add('active');
+  setTimeout(()=>{
+    scanLine.classList.remove('active');
+    dzLabel.textContent = 'Extracted entries:';
+    extracted.forEach((row,i)=>{
+      setTimeout(()=>{
+        const div = document.createElement('div');
+        div.className = 'erow';
+        div.innerHTML = `<span>${row.d} — ${row.desc}</span><span>${row.a}</span>`;
+        extractList.appendChild(div);
+        requestAnimationFrame(()=>div.classList.add('show'));
+        if(i === extracted.length-1){
+          setTimeout(()=>{ stampNote.classList.add('show'); ingestRunning=false; }, 300);
+        }
+      }, i*350);
+    });
+  }, 1500);
+});
+
+// ---------- categorization table ----------
+const categories = ['Client Income','Local Sales','Utilities','Software & Tools','Platform Fees'];
+const txRows = [
+  {date:'03 Aug', desc:'Payoneer — Bright Studio LLC', amt:184500, credit:true, cat:'Client Income', conf:'high', src:'Payoneer', status:'ok'},
+  {date:'05 Aug', desc:'Wise — NovaTech Inc', amt:96200, credit:true, cat:'Client Income', conf:'high', src:'Wise', status:'ok'},
+  {date:'07 Aug', desc:'Bank — Zaid Traders', amt:45000, credit:true, cat:'Local Sales', conf:'med', src:'Bank', status:'ok'},
+  {date:'09 Aug', desc:'WhatsApp — Ahsan Bhai', amt:12000, credit:true, cat:'Client Income', conf:'low', src:'WhatsApp', status:'review'},
+  {date:'10 Aug', desc:'Payoneer — Platform Fee', amt:-1840, credit:false, cat:'Platform Fees', conf:'high', src:'Payoneer', status:'ok'},
+  {date:'12 Aug', desc:'Bank — LESCO Electricity', amt:-8400, credit:false, cat:'Utilities', conf:'high', src:'Bank', status:'ok'},
+  {date:'14 Aug', desc:'Wise — Figma Subscription', amt:-3200, credit:false, cat:'Software & Tools', conf:'high', src:'Wise', status:'ok'},
+  {date:'15 Aug', desc:'WhatsApp — Client retainer', amt:60000, credit:true, cat:'Client Income', conf:'med', src:'WhatsApp', status:'ok'},
+];
+const catTableBody = document.querySelector('#catTable tbody');
+
+function fmtAmt(n){
+  const abs = Math.abs(n).toLocaleString('en-PK');
+  return (n<0?'– PKR ':'PKR ') + abs;
+}
+
+function buildRow(row, idx){
+  const tr = document.createElement('tr');
+  tr.dataset.idx = idx;
+  if(row.status === 'review') tr.classList.add('review');
+  tr.innerHTML = `
+    <td>${row.date}</td>
+    <td>${row.desc}</td>
+    <td class="amt-cell ${row.credit?'credit':'debit'}">${fmtAmt(row.amt)}</td>
+    <td style="position:relative;">
+      <button class="cat-pill" data-idx="${idx}">
+        <span class="conf-dot ${row.conf}"></span>${row.cat}
+      </button>
+    </td>
+    <td class="src-tag">${row.src}</td>
+    <td class="status-tag ${row.status}">${row.status==='review' ? 'Needs review' : (row.status==='learned' ? 'Learned' : 'Categorized')}</td>
+  `;
+  return tr;
+}
+txRows.forEach((row,i)=>catTableBody.appendChild(buildRow(row,i)));
+
+let openDropdown = null;
+catTableBody.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.cat-pill');
+  if(!btn) return;
+  if(openDropdown) openDropdown.remove();
+  const idx = btn.dataset.idx;
+  const dd = document.createElement('div');
+  dd.className = 'cat-dropdown open';
+  categories.forEach(c=>{
+    const b = document.createElement('button');
+    b.textContent = c;
+    b.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const row = txRows[idx];
+      row.cat = c;
+      row.status = 'learned';
+      row.conf = 'learned';
+      const tr = catTableBody.querySelector(`tr[data-idx="${idx}"]`);
+      tr.replaceWith(buildRow(row, idx));
+      dd.remove();
+      showToast(`Munshi will remember this for "${row.desc.split('—')[1]?.trim() || row.desc}" next time.`);
+    });
+    dd.appendChild(b);
+  });
+  document.body.appendChild(dd);
+  const r = btn.getBoundingClientRect();
+  dd.style.top = (window.scrollY + r.bottom + 4) + 'px';
+  dd.style.left = (window.scrollX + r.left) + 'px';
+  openDropdown = dd;
+  e.stopPropagation();
+});
+document.addEventListener('click', ()=>{ if(openDropdown){ openDropdown.remove(); openDropdown=null; } });
+
+// ---------- approval / payout demo ----------
+document.querySelectorAll('.btn-approve, .btn-decline').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const cardId = btn.dataset.approval;
+    const card = document.getElementById(cardId);
+    const statusId = cardId === 'approvalBill' ? 'statusBill' : 'statusPayout';
+    const statusEl = document.getElementById(statusId);
+    const isApprove = btn.classList.contains('btn-approve');
+    const label = cardId === 'approvalBill' ? 'LESCO bill' : 'client payout';
+
+    if(!isApprove){
+      statusEl.textContent = `Declined — ${label} was not sent.`;
+      statusEl.classList.add('show','declined');
+      card.classList.add('resolved');
+      return;
+    }
+
+    statusEl.textContent = 'Sending approval to payment partner…';
+    statusEl.classList.add('show');
+    statusEl.classList.remove('declined');
+    setTimeout(()=>{
+      statusEl.textContent = `✓ Approved — ${label} paid via demo rail (no real funds moved).`;
+      card.classList.add('resolved');
+      showToast(`${label.charAt(0).toUpperCase()+label.slice(1)} marked as paid.`);
+    }, 1200);
+  });
+});
+
+// ---------- toast ----------
+let toastTimer;
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> toast.classList.remove('show'), 3200);
+}
+
+// ---------- export button ----------
+const exportBtn = document.getElementById('exportBtn');
+const exportConfirm = document.getElementById('exportConfirm');
+exportBtn.addEventListener('click', ()=>{
+  exportBtn.textContent = 'Preparing summary…';
+  setTimeout(()=>{
+    exportBtn.textContent = 'Export FBR summary';
+    exportConfirm.classList.add('show');
+    setTimeout(()=> exportConfirm.classList.remove('show'), 3000);
+  }, 900);
+});
+
+// ---------- filing-season countdown ----------
+function nextFilingDeadline(){
+  const now = new Date();
+  let deadline = new Date(now.getFullYear(), 8, 30, 23, 59, 59); // 30 Sept
+  if(now > deadline) deadline = new Date(now.getFullYear()+1, 8, 30, 23, 59, 59);
+  return deadline;
+}
+function tickCountdown(){
+  const diff = nextFilingDeadline() - new Date();
+  const days = Math.floor(diff / (1000*60*60*24));
+  const hours = Math.floor((diff / (1000*60*60)) % 24);
+  const mins = Math.floor((diff / (1000*60)) % 60);
+  const dEl = document.getElementById('cdDays');
+  const hEl = document.getElementById('cdHours');
+  const mEl = document.getElementById('cdMins');
+  if(dEl){ dEl.textContent = days; hEl.textContent = String(hours).padStart(2,'0'); mEl.textContent = String(mins).padStart(2,'0'); }
+}
+tickCountdown();
+setInterval(tickCountdown, 30000);
+
+// ---------- FAQ floating chips: settle on scroll ----------
+const faqFloatEls = document.querySelectorAll('.faq-float');
+const faqFloatObserver = new IntersectionObserver((entries)=>{
+  entries.forEach((e,i)=>{
+    if(e.isIntersecting){
+      setTimeout(()=>e.target.classList.add('settle'), i*150);
+      faqFloatObserver.unobserve(e.target);
+    }
+  });
+},{threshold:0.3});
+faqFloatEls.forEach(el=>faqFloatObserver.observe(el));
+
+// ---------- FAQ accordion ----------
+document.querySelectorAll('.faq-item').forEach(item=>{
+  const q = item.querySelector('.faq-q');
+  const a = item.querySelector('.faq-a');
+  q.addEventListener('click', ()=>{
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(other=>{
+      if(other !== item){ other.classList.remove('open'); other.querySelector('.faq-a').style.maxHeight = null; }
+    });
+    if(isOpen){
+      item.classList.remove('open');
+      a.style.maxHeight = null;
+    } else {
+      item.classList.add('open');
+      a.style.maxHeight = a.scrollHeight + 'px';
+    }
+  });
+});
+</script>
+</body>
+</html>

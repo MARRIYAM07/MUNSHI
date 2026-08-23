@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munshi — Confirm payment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EAE3D3; --paper-alt:#F3EEE1; --paper-line:#C9C2AC;
+  --ink:#1A2E22; --ink-soft:#4A5148;
+  --forest:#14442F; --forest-dark:#0D2E1F;
+  --red:#9C2B1B; --red-soft:#C2543F;
+  --brass:#A97C2F; --muted:#7A7361;
+  --serif:'IBM Plex Serif', Georgia, serif;
+  --sans:'IBM Plex Sans', -apple-system, sans-serif;
+  --mono:'IBM Plex Mono', monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--paper); color:var(--ink); font-family:var(--sans); line-height:1.55; background-image:repeating-linear-gradient(transparent, transparent 35px, rgba(201,194,172,0.4) 36px);}
+h1,h2,h3{font-family:var(--serif); font-weight:600; color:var(--forest-dark); letter-spacing:-0.01em;}
+.mono{font-family:var(--mono);}
+a{color:inherit;}
+button,input,select,textarea{font-family:inherit;}
+.wrap{max-width:920px; margin:0 auto; padding:0 28px;}
+
+nav{border-bottom:1px solid var(--paper-line); padding:16px 0;}
+.nav-inner{max-width:920px; margin:0 auto; padding:0 28px; display:flex; justify-content:space-between; align-items:center;}
+.wordmark{font-family:var(--serif); font-size:19px; font-weight:700; color:var(--forest-dark); display:flex; align-items:center; gap:9px;}
+.wordmark img{width:28px; height:29px; border-radius:6px; object-fit:cover;}
+.wordmark .dot{color:var(--red);}
+.nav-link{font-family:var(--mono); font-size:12px; color:var(--ink-soft); text-decoration:none;}
+
+.hero{padding:38px 0 6px; text-align:center;}
+.eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--brass); display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600; margin-bottom:10px;}
+.eyebrow::before,.eyebrow::after{content:''; width:22px; height:2px; background:var(--brass);}
+.hero h1{font-size:clamp(24px,3.2vw,32px);}
+.hero p{color:var(--ink-soft); font-size:14.5px; margin-top:8px; max-width:52ch; margin-left:auto; margin-right:auto;}
+
+/* order summary */
+.order-card{
+  max-width:620px; margin:26px auto 0; background:var(--paper-alt); border:1px solid var(--paper-line);
+  display:flex; align-items:center; justify-content:space-between; padding:16px 22px; gap:16px; flex-wrap:wrap;
+}
+.order-plan{display:flex; align-items:center; gap:12px;}
+.order-plan .badge{font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--brass); background:rgba(169,124,47,0.12); padding:3px 8px;}
+.order-plan h3{font-size:17px; margin-top:3px;}
+.order-price{text-align:right;}
+.order-price .amt{font-family:var(--mono); font-size:22px; font-weight:600; color:var(--forest-dark);}
+.order-price .cyc{font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:2px;}
+.order-features{max-width:620px; margin:10px auto 0; display:flex; flex-wrap:wrap; gap:8px 18px; justify-content:center;}
+.order-features span{font-family:var(--mono); font-size:11px; color:var(--ink-soft); display:flex; align-items:center; gap:5px;}
+.order-features span::before{content:'✓'; color:var(--forest); font-weight:600;}
+
+.panel-wrap{padding:30px 0 80px;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:start;}
+@media (max-width:860px){ .grid2{grid-template-columns:1fr;} }
+
+.col-card{background:var(--paper-alt); border:1px solid var(--paper-line);}
+.col-head{padding:18px 22px 4px;}
+.col-head h3{font-size:16.5px;}
+.col-head p{font-size:12.5px; color:var(--muted); margin-top:5px; line-height:1.6;}
+.col-body{padding:16px 22px 22px;}
+
+/* payment method cards */
+.pay-option{
+  border:1px solid var(--paper-line); background:var(--paper); padding:14px 16px; margin-bottom:12px; cursor:pointer;
+}
+.pay-option:hover{border-color:var(--forest);}
+.pay-option.selected{border:1.5px solid var(--forest); background:var(--paper-alt);}
+.pay-head{display:flex; justify-content:space-between; align-items:center;}
+.pay-head .nm{font-family:var(--sans); font-size:14.5px; font-weight:600; color:var(--ink);}
+.pay-radio{width:17px; height:17px; border-radius:50%; border:1.5px solid var(--paper-line); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.pay-option.selected .pay-radio{border-color:var(--forest);}
+.pay-option.selected .pay-radio::after{content:''; width:9px; height:9px; border-radius:50%; background:var(--forest);}
+.pay-detail{margin-top:8px; display:none;}
+.pay-option.selected .pay-detail{display:block;}
+.pay-row{display:flex; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:13px; color:var(--ink-soft); padding:4px 0;}
+.copy-btn{background:none; border:1px solid var(--paper-line); font-family:var(--mono); font-size:10px; padding:3px 8px; cursor:pointer; color:var(--ink-soft);}
+.copy-btn:hover{border-color:var(--forest); color:var(--forest-dark);}
+.acct-title{font-size:11.5px; color:var(--muted); margin-top:2px;}
+
+/* form */
+.form-field{display:flex; flex-direction:column; gap:5px; margin-bottom:14px;}
+.form-field label{font-family:var(--mono); font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em;}
+.form-field label .req{color:var(--red);}
+.form-field input,.form-field textarea{font-family:var(--sans); font-size:13.5px; padding:10px 12px; border:1px solid var(--paper-line); background:var(--paper);}
+.form-field input:focus,.form-field textarea:focus{outline:1.5px solid var(--forest);}
+.form-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+@media (max-width:500px){ .form-row{grid-template-columns:1fr;} }
+
+.upload-box{border:1.5px dashed var(--paper-line); background:var(--paper); padding:18px; text-align:center; cursor:pointer;}
+.upload-box:hover{border-color:var(--forest);}
+.upload-box .ic{font-family:var(--mono); font-size:16px; color:var(--forest); margin-bottom:6px;}
+.upload-box .lbl{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft);}
+.upload-box.has-file{border-style:solid; border-color:var(--forest);}
+
+.pay-note{font-family:var(--mono); font-size:11px; color:var(--muted); background:var(--paper); border:1px dashed var(--paper-line); padding:10px 12px; margin-top:14px; line-height:1.6;}
+
+.btn{font-family:var(--mono); font-size:13px; letter-spacing:0.03em; padding:12px 22px; border:1px solid var(--forest); background:transparent; color:var(--forest-dark); cursor:pointer;}
+.btn.solid{background:var(--forest); color:var(--paper); border-color:var(--forest);}
+.btn.solid:hover{background:var(--forest-dark);}
+.btn.wide{width:100%;}
+
+/* confirmation */
+.confirm-wrap{display:none; text-align:center; max-width:520px; margin:0 auto;}
+.confirm-wrap.show{display:block;}
+.confirm-stamp{width:74px; height:74px; border-radius:50%; border:2.5px solid var(--forest); color:var(--forest); background:rgba(20,68,47,0.08); display:flex; align-items:center; justify-content:center; margin:0 auto 20px; font-family:var(--mono); font-size:26px; transform:rotate(-8deg);}
+.confirm-card{background:var(--paper-alt); border:1px solid var(--paper-line); padding:26px; text-align:left; margin-top:20px;}
+.confirm-row{display:flex; justify-content:space-between; font-family:var(--mono); font-size:13px; padding:8px 0; border-bottom:1px dashed var(--paper-line);}
+.form-hide{display:none;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="wordmark"><img src="data:image/png;base64,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" alt="Munshi logo">MUNSHI<span class="dot">.</span></div>
+    <a class="nav-link" href="munshi-signup.html">← Back to plan selection</a>
+  </div>
+</nav>
+
+<div id="paymentFlow">
+  <header class="hero">
+    <div class="eyebrow">Activate your plan</div>
+    <h1>Pay via JazzCash, EasyPaisa, or bank</h1>
+    <p>Send the amount to one of the accounts below, add your transaction reference, and we'll activate your plan within 24 hours.</p>
+  </header>
+
+  <div class="order-card">
+    <div class="order-plan">
+      <div>
+        <div class="badge" id="orderBadge">Freelancer</div>
+        <h3 id="orderPlanName">Munshi Pro</h3>
+      </div>
+    </div>
+    <div class="order-price">
+      <div class="amt" id="orderAmt">$10</div>
+      <div class="cyc" id="orderCycle">billed monthly</div>
+    </div>
+  </div>
+  <div class="order-features" id="orderFeatures"></div>
+
+  <div class="panel-wrap wrap">
+    <div class="grid2">
+
+      <div class="col-card">
+        <div class="col-head">
+          <h3>Send payment to</h3>
+          <p>Pick one option. Use your business name as the reference so we can match it faster.</p>
+        </div>
+        <div class="col-body">
+          <div class="pay-option selected" data-method="jazzcash" onclick="selectPay('jazzcash')">
+            <div class="pay-head"><span class="nm">JazzCash</span><span class="pay-radio"></span></div>
+            <div class="pay-detail">
+              <div class="pay-row"><span>0300 1234567</span><button class="copy-btn" onclick="copyText(event,'03001234567')">Copy</button></div>
+              <div class="acct-title">Account title: Munshi Pakistan</div>
+            </div>
+          </div>
+          <div class="pay-option" data-method="easypaisa" onclick="selectPay('easypaisa')">
+            <div class="pay-head"><span class="nm">EasyPaisa</span><span class="pay-radio"></span></div>
+            <div class="pay-detail">
+              <div class="pay-row"><span>0300 7654321</span><button class="copy-btn" onclick="copyText(event,'03007654321')">Copy</button></div>
+              <div class="acct-title">Account title: Munshi Pakistan</div>
+            </div>
+          </div>
+          <div class="pay-option" data-method="bank" onclick="selectPay('bank')">
+            <div class="pay-head"><span class="nm">Bank transfer</span><span class="pay-radio"></span></div>
+            <div class="pay-detail">
+              <div class="pay-row"><span>Bank Alfalah · IBAN</span><button class="copy-btn" onclick="copyText(event,'PK00XXXX0000000000000000')">Copy</button></div>
+              <div class="pay-row" style="padding-top:0;"><span>PK00XXXX0000000000000000</span></div>
+              <div class="acct-title">Account title: Munshi Pakistan</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-card">
+        <div class="col-head">
+          <h3>Your details</h3>
+          <p>Paying as <strong id="payingAsName">—</strong>. Plan activates on <strong id="payingAsBiz">—</strong> the moment we confirm the receipt.</p>
+        </div>
+        <div class="col-body">
+          <div class="form-row">
+            <div class="form-field"><label>Phone <span class="req">*</span></label><input id="fPhone" placeholder="0300 1234567"></div>
+            <div class="form-field"><label>WhatsApp (optional)</label><input id="fWhatsapp" placeholder="0300 1234567"></div>
+          </div>
+          <div class="form-field"><label>Transaction reference (TID)</label><input id="fTid" placeholder="e.g. TX-1234567"></div>
+          <div class="form-field">
+            <label>Screenshot (optional)</label>
+            <div class="upload-box" id="uploadBox" onclick="mockUpload()">
+              <div class="ic">↑</div>
+              <div class="lbl" id="uploadLabel">Click to attach a receipt screenshot</div>
+            </div>
+          </div>
+          <button class="btn solid wide" onclick="submitPayment()">Submit payment for review</button>
+          <div class="pay-note">This activates a real subscription in production. Here, it's a demo — submitting just shows what your subscriber sees while their receipt is under review.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="panel-wrap wrap confirm-wrap" id="confirmWrap">
+  <div class="confirm-stamp">✓</div>
+  <h2>Payment submitted for review</h2>
+  <p style="color:var(--ink-soft); font-size:14px; margin-top:8px;">We'll confirm your receipt and activate your plan within 24 hours. You can start using Munshi right away — your books just won't sync to your new plan's limits until we approve it.</p>
+  <div class="confirm-card">
+    <div class="confirm-row"><span>Plan</span><span id="cfPlan" class="mono"></span></div>
+    <div class="confirm-row"><span>Amount</span><span id="cfAmt" class="mono"></span></div>
+    <div class="confirm-row"><span>Method</span><span id="cfMethod" class="mono"></span></div>
+    <div class="confirm-row"><span>Business</span><span id="cfBiz" class="mono"></span></div>
+  </div>
+  <button class="btn solid wide" style="margin-top:22px;" id="cfEnterBtn">Continue to your dashboard →</button>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const plan = params.get('plan') || 'pro';
+const cycle = params.get('cycle') || 'monthly';
+const biz = params.get('biz') || 'your business';
+const name = params.get('name') || 'there';
+const dest = params.get('dest') || 'munshi-admin.html?ctx=solo';
+
+const PLAN_INFO = {
+  pro: {
+    badge:'Freelancer', title:'Munshi Pro',
+    monthly:{amt:'$10', cyc:'billed monthly'}, yearly:{amt:'$100', cyc:'billed yearly · $8.33/mo'},
+    features:['Unlimited transactions','Merchant-learning categorization','Client due-date reminders','FBR-ready exports']
+  },
+  teams: {
+    badge:'Small Business', title:'Munshi Teams',
+    monthly:{amt:'$30', cyc:'billed monthly'}, yearly:{amt:'$300', cyc:'billed yearly · $25/mo'},
+    features:['Everything in Pro','Owner + up to 4 team members','Owner sees every member\'s ledger','Members\' data stays private']
+  }
+};
+const info = PLAN_INFO[plan] || PLAN_INFO.pro;
+const priceInfo = info[cycle] || info.monthly;
+
+document.getElementById('orderBadge').textContent = info.badge;
+document.getElementById('orderPlanName').textContent = info.title;
+document.getElementById('orderAmt').textContent = priceInfo.amt;
+document.getElementById('orderCycle').textContent = priceInfo.cyc;
+document.getElementById('orderFeatures').innerHTML = info.features.map(f=>`<span>${f}</span>`).join('');
+document.getElementById('payingAsName').textContent = name;
+document.getElementById('payingAsBiz').textContent = biz;
+
+let selectedMethod = 'jazzcash';
+function selectPay(m){
+  selectedMethod = m;
+  document.querySelectorAll('.pay-option').forEach(el=>el.classList.toggle('selected', el.dataset.method===m));
+}
+
+function copyText(e, text){
+  e.stopPropagation();
+  navigator.clipboard && navigator.clipboard.writeText(text);
+  const btn=e.target; const old=btn.textContent; btn.textContent='Copied'; setTimeout(()=>btn.textContent=old,1200);
+}
+
+function mockUpload(){
+  document.getElementById('uploadBox').classList.add('has-file');
+  document.getElementById('uploadLabel').textContent = 'receipt-screenshot.jpg attached';
+}
+
+function submitPayment(){
+  const phone = document.getElementById('fPhone').value;
+  if(!phone){ document.getElementById('fPhone').focus(); return; }
+
+  document.getElementById('cfPlan').textContent = info.title + ' (' + (cycle==='monthly'?'Monthly':'Yearly') + ')';
+  document.getElementById('cfAmt').textContent = priceInfo.amt;
+  document.getElementById('cfMethod').textContent = selectedMethod==='jazzcash'?'JazzCash':selectedMethod==='easypaisa'?'EasyPaisa':'Bank transfer';
+  document.getElementById('cfBiz').textContent = biz;
+  document.getElementById('cfEnterBtn').onclick = ()=> location.href = dest + (dest.includes('?')?'&':'?') + 'biz=' + encodeURIComponent(biz);
+
+  document.getElementById('paymentFlow').style.display='none';
+  document.getElementById('confirmWrap').classList.add('show');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";import { z } from "zod";import { apiError } from "@/lib/http";import { requireMember } from "@/lib/supabase";import { encryptField } from "@/lib/crypto";import { GMAIL_SCOPE,oauthClient } from "@/lib/gmail";
+export const runtime="nodejs";
+export async function GET(request:Request){try{const businessId=z.string().uuid().parse(new URL(request.url).searchParams.get("business_id")),{user}=await requireMember(businessId);const state=encryptField({businessId,userId:user.id,expiresAt:Date.now()+10*60_000}).toString("base64url");const url=oauthClient().generateAuthUrl({access_type:"offline",prompt:"consent",include_granted_scopes:false,scope:[GMAIL_SCOPE],state});return NextResponse.redirect(url);}catch(e){return apiError(e);}}
