@@ -6,19 +6,26 @@ AI bookkeeping for Pakistani freelancers and small businesses. Munshi reads paym
 
 Actively in development. Not yet deployed. See `docs/design-reference/` for the validated visual design and `docs/design-system.md` for extracted design tokens.
 
-**Built so far:**
-- Database schema with Row Level Security (`supabase/migrations/0001_init.sql`, `0002_encryption.sql`)
-- Field-level encryption for sensitive data (`lib/crypto.ts`)
-- Gmail OAuth ingestion (read-only, sender-allowlisted) and SMS-forwarding ingestion
-- Categorization pipeline: merchant cache → keyword rules → Claude Haiku fallback, with learn-on-correction
-- Shared UI components (`components/ui/`, `components/app/`)
-- Landing page ported to Next.js (`app/page.tsx`)
+### Done
 
-**Not yet built:**
-- Real auth wiring (login/signup pages, session middleware)
-- Admin/team-owner/superadmin dashboard pages
-- Payment/billing (Stripe)
-- Generated Supabase types
+- **Database & security** — full schema (`supabase/migrations/0001_init.sql`) covering businesses, team_members, connected_accounts, transactions, categories, merchant_cache, clients, invoices, approvals, notifications, subscriptions, staff_users, coupons, feature_flags. Row Level Security on every table, including the private-ledger rule (a team member sees only their own transactions; the owner sees everyone's). Field-level encryption for tokens and raw ingested content (`0002_encryption.sql`, `lib/crypto.ts`). Migrations applied to a real Supabase project.
+- **Ingestion** — Gmail OAuth (read-only, sender-allowlisted to Payoneer/Wise/Upwork/Fiverr) and SMS-forwarding (JazzCash/Easypaisa/bank SMS), both writing into a shared staging table with a `parsing_failures` table feeding the staff-facing health panel. 17 parser tests passing.
+- **Categorization** — merchant_cache (fuzzy match) → keyword rules → Claude Haiku fallback → learn-on-correction. 5 tests passing.
+- **Dashboard API** — `/api/connected-accounts`, `/api/transactions`, `/api/parsing-health`, `/api/categorize/run`, and the correction endpoint, all shape-matched to the frontend's data contracts.
+- **Frontend foundation** — merged into a single Next.js app. Design tokens extracted into `app/globals.css` (documented in `docs/design-system.md`). Shared, tested components: `AppShell`, `KpiCard`, `LedgerTable`, `StatusPill`, `Toast`, `Modal`, `ToggleSwitch`. Landing page fully ported (`app/page.tsx`), production build verified.
+
+### Not yet built
+
+1. Generated Supabase types (`lib/database.types.ts`)
+2. Real auth — session handling (`proxy.ts`), login/signup pages
+3. `0003_client_linking.sql` migration (adds `transactions.client_id`, `clients.next_reminder_at`, `clients.retainer_note`)
+4. Admin dashboard (Overview, Transactions, Categorize, Clients, Connected Accounts, Reports)
+5. Team-owner console (incl. real member invite flow)
+6. Superadmin console (Subscribers, Coupons, Broadcast, Feature Flags, Audit Log; client-side gate replaced with `requireStaff()` middleware)
+7. Payment page (real routing/DB writes; Stripe deferred)
+8. Stripe billing
+9. Approvals mutation routes (`POST /api/approvals/:id/approve` / `decline`)
+10. Statement ingest upload / OCR
 
 ## Stack
 
