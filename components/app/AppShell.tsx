@@ -1,4 +1,5 @@
 import {Fragment,type ReactNode} from "react";
+import {signOut} from "@/app/actions/auth";
 
 export type AppNavItem={
   id:string;
@@ -44,7 +45,10 @@ export function AppShell({navItems,activeItemId,title,subtitle,brand,topActions,
             </Fragment>;
           })}
         </nav>
-        {sidebarFooter?<div className="side-foot">{sidebarFooter}</div>:null}
+        <div className="side-foot">
+          {sidebarFooter}
+          <form action={signOut}><button className="side-link" type="submit"><span className="ic" aria-hidden="true">↪</span><span className="lbl">Sign out</span></button></form>
+        </div>
       </aside>
       <header className="top">
         <div className="top-inner">
