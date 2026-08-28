@@ -1176,8 +1176,14 @@ Tax-related information is intended for awareness and should be verified with a 
 
 # 📜 License
 
-Add the project's license here.
+© 2026 Marriyam Andeel & Amna Kousar. All rights reserved.
 
+Munshi is proprietary software. The source code may not be copied, modified, distributed, or used commercially without prior written permission from the authors.
+
+For licensing, partnership, or commercial inquiries:
+
+📧 marriyamandeel07@gmail.com  
+📧 amnakousarbandesha@gmail.com
 ---
 
 ## 🧾 Munshi
