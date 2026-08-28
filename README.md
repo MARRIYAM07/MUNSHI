@@ -1,82 +1,246 @@
-# Munshi
+# 📒 Munshi (منشی)
+### AI Bookkeeping for Pakistan's Freelance Economy
 
-AI bookkeeping for Pakistani freelancers and small businesses. Munshi reads payment confirmations (Payoneer, Wise, Upwork, Fiverr via Gmail; JazzCash/Easypaisa via SMS forwarding), categorizes transactions automatically, tracks what clients owe, and produces FBR-ready summaries — without manual data entry.
+> *"QuickBooks doesn't know what a Meezan transaction screenshot is. We do. That's the whole product."*
 
-## Status
+**Alibaba Cloud Hackathon 2026 — Financial Inclusion Track**
+Built by **Marriyam Andeel** & **Amna Kousar** — BS Artificial Intelligence, COMSATS University Islamabad (Lahore Campus)
 
-Actively in development. Not yet deployed. See `docs/design-reference/` for the validated visual design and `docs/design-system.md` for extracted design tokens.
+---
 
-### Done
+> ⚠️ **Before you push this:** the checklist in [Build Status](#build-status) below is written from our documentation and dev conversations, not a live read of the repo. Confirm every box against what's actually running before this goes out — an unchecked claim in front of judges is worse than an honest "Coming Soon."
 
-- **Database & security** — full schema (`supabase/migrations/0001_init.sql`) covering businesses, team_members, connected_accounts, transactions, categories, merchant_cache, clients, invoices, approvals, notifications, subscriptions, staff_users, coupons, feature_flags. Row Level Security on every table, including the private-ledger rule (a team member sees only their own transactions; the owner sees everyone's). Field-level encryption for tokens and raw ingested content (`0002_encryption.sql`, `lib/crypto.ts`). Migrations applied to a real Supabase project.
-- **Ingestion** — Gmail OAuth (read-only, sender-allowlisted to Payoneer/Wise/Upwork/Fiverr) and SMS-forwarding (JazzCash/Easypaisa/bank SMS), both writing into a shared staging table with a `parsing_failures` table feeding the staff-facing health panel. 17 parser tests passing.
-- **Categorization** — merchant_cache (fuzzy match) → keyword rules → Claude Haiku fallback → learn-on-correction. 5 tests passing.
-- **Dashboard API** — `/api/connected-accounts`, `/api/transactions`, `/api/parsing-health`, `/api/categorize/run`, and the correction endpoint, all shape-matched to the frontend's data contracts.
-- **Frontend foundation** — merged into a single Next.js app. Design tokens extracted into `app/globals.css` (documented in `docs/design-system.md`). Shared, tested components: `AppShell`, `KpiCard`, `LedgerTable`, `StatusPill`, `Toast`, `Modal`, `ToggleSwitch`. Landing page fully ported (`app/page.tsx`), production build verified.
+---
 
-### Not yet built
+## The Problem, In One Person
 
-1. Generated Supabase types (`lib/database.types.ts`)
-2. Real auth — session handling (`proxy.ts`), login/signup pages
-3. `0003_client_linking.sql` migration (adds `transactions.client_id`, `clients.next_reminder_at`, `clients.retainer_note`)
-4. Admin dashboard (Overview, Transactions, Categorize, Clients, Connected Accounts, Reports)
-5. Team-owner console (incl. real member invite flow)
-6. Superadmin console (Subscribers, Coupons, Broadcast, Feature Flags, Audit Log; client-side gate replaced with `requireStaff()` middleware)
-7. Payment page (real routing/DB writes; Stripe deferred)
-8. Stripe billing
-9. Approvals mutation routes (`POST /api/approvals/:id/approve` / `decline`)
-10. Statement ingest upload / OCR
+Meet **Hamza** — 24, a CS grad freelancing on Upwork, earning $300–600/month from international clients.
 
-## Stack
+He's paid through **Payoneer**, into a **Meezan** account. One client pays via **Wise**. Another sends money on WhatsApp — *"bhai account number do, transfer karta hun."* A fourth has owed him for six weeks; he keeps forgetting to follow up.
 
-- **Frontend/Backend:** Next.js (App Router), deployed on Vercel
-- **Database:** Supabase (Postgres) with Row Level Security
-- **AI:** Claude Haiku (Anthropic API) for transaction categorization
-- **Auth:** Supabase Auth via `@supabase/ssr`
+His "accounting system" is a WhatsApp chat, a screenshots folder he never opens, and memory. Ask him what he earned last quarter and he'll spend two hours scrolling receipts to guess — and probably get it wrong. He has no idea what he owes FBR. He's a non-filer, paying higher withholding tax on every bank transaction, without knowing it.
 
-## Getting started
+**This isn't one person. It's most of Pakistan's 2.3M+ active freelancers**, who earned **$1.76B in export income in FY26** (up 78% YoY) with **zero bookkeeping tools built for how they actually get paid.**
 
-```bash
-npm install
-cp .env.example .env.local   # fill in your own values, see below
-npm run dev
-```
+Munshi's real competitor isn't QuickBooks. It's a WhatsApp note to self. That's what we're replacing.
 
-### Environment variables
+---
 
-See `.env.example` for the full list. You'll need:
-- A Supabase project (URL, anon key, service role key)
-- `FIELD_ENCRYPTION_KEY` — 32 random bytes, base64-encoded (`openssl rand -base64 32`)
-- `ANTHROPIC_API_KEY` — for the categorization fallback
-- `CRON_SECRET` — any random string, protects scheduled sync endpoints
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — for Gmail ingestion (set up later)
+## Why This Is Hard (Not Just "Add AI To A Ledger")
 
-### Database setup
+This is the section that separates a bookkeeping CRUD app from Munshi:
 
-Migrations live in `supabase/migrations/`, numbered and append-only. Apply them via the Supabase Dashboard SQL Editor (or `supabase db push` if using the CLI) in order: `0001_init.sql`, then `0002_encryption.sql`.
+| Constraint | Why it's non-trivial |
+|---|---|
+| **No unified payment rail** | Freelancers get paid across Payoneer, Wise, direct bank transfer, and WhatsApp — each with a different notification format, no shared schema |
+| **Messy, mixed-language source data** | Bank SMS and screenshots mix Urdu and English, inconsistent formats across Meezan, HBL, Easypaisa, JazzCash, Payoneer, Fiverr, Upwork |
+| **Multi-currency at transaction granularity** | Every payment must convert to PKR at the *historical* rate on its *own* transaction date — not today's rate — or the ledger is silently wrong |
+| **Regulatory liability, not just UX** | FBR guidance carries real legal risk if wrong. We had to design a scope boundary — *awareness, not advice* — and hold it everywhere in the product, not just once |
+| **Cost has to scale down, not up** | Naive design = one LLM call per transaction forever. We had to design a caching architecture where marginal AI cost trends toward zero as usage grows |
+| **Privacy-by-architecture, not policy** | Real financial data demands row-level security and field-level encryption enforced at the database layer — not a privacy policy promising good behavior |
 
-Optionally seed local/dev data with `supabase/seed.sql`.
+None of these are solved by "wrap GPT around a spreadsheet." Each one shaped a real architectural decision below.
 
-### Verify
+---
 
-```bash
-npm run typecheck
-npm test
-```
-
-## Project structure
+## The Core Loop
 
 ```
-app/                    Next.js App Router pages and API routes
-components/ui/          Shared design-system components (KpiCard, LedgerTable, StatusPill, ...)
-components/app/         App-level components (AppShell, sidebar/topbar)
-components/marketing/   Landing-page-specific components
-lib/                    Business logic: categorization, crypto, Gmail/SMS parsing, Supabase clients
-supabase/migrations/    Numbered, append-only SQL migrations
-docs/design-reference/  Original validated HTML/CSS design spec (not served — reference only)
-docs/design-system.md   Extracted design tokens and shared class documentation
+User uploads payment screenshot / PDF / forwards a WhatsApp message
+                        ↓
+     Claude (vision) extracts amount, currency, date, sender, type
+                        ↓
+        One clarifying question only if a field is ambiguous
+                        ↓
+   merchant_cache lookup → known pattern? instant categorization
+                        ↓
+        No match → Claude Haiku categorizes, writes back to cache
+                        ↓
+              Saved to a running, correctable ledger
+                        ↓
+   Dashboard: monthly total (PKR), non-filer flag, transaction list
 ```
 
-## Design language
+---
 
-Munshi's visual identity is a "ledger/khata" aesthetic — forest green, red ink, brass, paper tones, IBM Plex typography, mostly sharp corners. `docs/design-reference/` is the source of truth for this; new UI should match it rather than reinterpret it.
+## Architecture
+
+```
+INGESTION                    PROCESSING                  OUTPUT
+┌───────────────┐      ┌──────────────────┐      ┌─────────────────────┐
+│ Screenshot/PDF │ ──▶  │ Claude Vision     │      │ Dashboard:           │
+│ upload         │      │ extraction        │      │  · Monthly total(PKR)│
+└───────────────┘      └────────┬─────────┘      │  · Non-filer flag     │
+┌───────────────┐               ▼                 │  · Transaction list   │
+│ Gmail (read-   │      ┌──────────────────┐      │  · Who-owes-me tracker│
+│ only, payment- │ ──▶  │ merchant_cache    │ ──▶  └─────────────────────┘
+│ domain scoped) │      │ lookup            │
+└───────────────┘      └────────┬─────────┘
+┌───────────────┐               ▼ (cache miss)
+│ JazzCash       │      ┌──────────────────┐      ┌─────────────────────┐
+│ SMS-forward    │ ──▶  │ Claude Haiku      │ ──▶  │ Ledger (Supabase,    │
+└───────────────┘      │ categorization    │      │ RLS-enforced,        │
+┌───────────────┐      └──────────────────┘      │ field-level encrypted)│
+│ WhatsApp       │                                 └─────────────────────┘
+│ quick-log      │ ──────────────────────────────────────▲
+└───────────────┘                                          │
+                                                one-tap correction
+                                              writes back to merchant_cache
+```
+
+**Single Next.js (App Router) application on Vercel, backed by Supabase (Postgres).** No separate backend service — API routes live in the same deployment. One AI provider (Anthropic) throughout, so there's one API relationship to manage, not a fragile multi-vendor pipeline.
+
+---
+
+## The Margin Lever: Why This Doesn't Bankrupt Itself At Scale
+
+The categorization pipeline is the core cost-engineering decision in the product:
+
+1. Normalize the transaction description
+2. Look up `merchant_cache` for a known pattern → **deterministic match, zero LLM cost**
+3. Cache miss → call **Claude Haiku** once, categorize, write the result back to `merchant_cache` — that merchant is never sent to an LLM again, for *any* user
+4. User can always one-tap correct → correction also updates the cache
+
+Because the cache is shared across users, **cost per user trends down over time**, and new users benefit from a cache already built by everyone before them. At scale, hosting and storage — not AI inference — become the dominant cost. This is the difference between a demo that works and a business model that survives 10,000 users instead of 20.
+
+**Model tiering:** Claude Haiku handles the categorization fallback (cheap, only on cache misses). Claude Sonnet is the planned escalation for harder cases once there's paying usage to justify it. Claude's vision capability handles receipt/document extraction directly — no separate OCR pipeline to integrate or maintain.
+
+---
+
+## Why Pakistan-Specific (The Moat)
+
+This is not a generic bookkeeper with an Urdu font bolted on.
+
+| Payment format Munshi reads natively | |
+|---|---|
+| Meezan / HBL | Transfer SMS, app screenshot, statement PDF |
+| Easypaisa / JazzCash | Payment confirmation screenshot, SMS-forward |
+| Payoneer / Wise | Payment confirmation email, statement PDF |
+| Upwork / Fiverr | Payout notification, revenue summary |
+| WhatsApp | Screenshot or forwarded message with an amount |
+
+No Western tool (QuickBooks, Wave, FreshBooks) understands any of these — they assume a Western bank account, a developer's patience for setup, and a bookkeeping habit that doesn't exist here.
+
+**Language:** Urdu, Roman Urdu, and English throughout — how young Pakistani freelancers actually text, not just how they'd fill out a form.
+
+**FBR awareness, deliberately scoped, not advice:**
+- Surfaces a non-filer flag with a plain-language explanation of why it costs them money
+- Points to NTN registration and FBR's IRIS portal
+- Surfaces common freelancer deduction categories (internet, platform fees, equipment, software) to raise with a CA
+- **Deliberately not built:** full FBR tax-slab calculation or an exact rupee-owed figure — slabs change annually and this carries real legal risk without CA sign-off. The single non-filer flag is judged to carry most of the value with the least liability. Every tax-adjacent surface repeats the disclaimer, not just once.
+
+---
+
+## Security & Data Model
+
+- **Row-Level Security (RLS)** enabled from the first migration, on every table — every query scoped to `user_id`, no "view all" path anywhere in the application layer. Non-negotiable regardless of build timeline.
+- **Field-level encryption (AES-256-GCM)** on sensitive columns — amounts, client names, raw transaction descriptions — unreadable even in a raw data export.
+- **No standing admin access** — the internal team's own dashboard shows platform metrics, not individual ledgers, by default.
+- **Audited, consent-based support access** — the only path to a user's raw data is time-boxed, logged, and tied to a specific support need.
+
+Core tables: `users`, `transactions` (amount, currency, pkr_amount, exchange_rate, source, category, raw_file_url), `merchant_cache` (pattern → category, the caching layer above), `invoices` / `clients` (the "who owes me" tracker), `categories` (with FBR-category mapping).
+
+---
+
+## Build Status
+
+*(Update this section immediately before pushing — mark only what's confirmed working in this exact commit.)*
+
+**Confirmed shipped:**
+- [x] Authentication — login, signup, session handling
+- [x] Supabase schema with RLS enabled from the first migration
+- [x] Transactions linked to clients (migration `0003`)
+- [x] Generated Supabase types wired into client factories
+
+**In progress / confirm before demo:**
+- [ ] Upload → Claude vision extraction → ledger write
+- [ ] Dashboard rendering live transaction data
+- [ ] Non-filer flag calculation
+- [ ] `merchant_cache` + Claude Haiku fallback categorization
+- [ ] Multi-currency conversion (ExchangeRate-API)
+
+**Documented, deliberately deferred (shown honestly as "Coming Soon" in-product, never hidden):**
+- Gmail OAuth ingestion (read-only, payment-domain scoped)
+- JazzCash SMS-forward parsing
+- WhatsApp quick-logging free-text parsing
+- Full FBR tax-slab calculation (out of scope indefinitely — legal risk without CA sign-off)
+- Staff roles / superadmin dashboard wired to real aggregate data
+
+---
+
+## Tech Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Frontend + Backend | Next.js (App Router) | One deployment, no cold-start risk on a live demo |
+| Database | Supabase (Postgres) | Auth + storage + DB in one place, RLS built in |
+| AI — extraction | Claude (vision) | Reads messy, mixed-language Pakistani payment formats without a separate OCR pipeline |
+| AI — categorization fallback | Claude Haiku | Cheap, called only on cache misses |
+| AI — escalation (planned) | Claude Sonnet | Harder cases once there's paying usage to justify it |
+| Currency | ExchangeRate-API | Historical rates, free tier sufficient at pilot scale |
+| Deployment | Vercel | One-click deploy, no cold starts |
+
+**Cost at pilot scale:** cache-first design means most transactions never trigger an LLM call. Paid infrastructure (Sonnet escalation, paid document-AI, paid WhatsApp Business tier) is an explicit Phase 2 decision, made only once there's real paying usage — not a cost the MVP has to carry to prove the idea works.
+
+---
+
+## Who It's For
+
+**Phase 1 — Freelancers** ($300–$5,000/month via Payoneer, Wise, direct transfer): income already arrives digital, so the core ledger + categorization + summary loop can be proven before any OCR/receipt-photo work is needed.
+
+**Phase 1.5 — Small shop / social-commerce owners**: run the business on a notebook, memory, or WhatsApp; don't know who owes them; can't afford an accountant. Same engine, adds receipt-photo ingestion.
+
+**Phase 2 — Platform / B2B**: verified income history licensed to lenders and fintechs — a high-margin layer once the core ledger has real usage behind it.
+
+---
+
+## Business Model
+
+| Plan | Price | Includes |
+|---|---|---|
+| **Free** | $0 | ~20 transactions/month — enough to prove the value before paying |
+| **Pro** | $12/month (USD-primary, PKR shown alongside) | Unlimited uploads, full history, FBR awareness module |
+| **Teams** | $25/month | Everything in Pro + multi-user, shared merchant cache benefits |
+
+USD-primary pricing reflects that the Phase 1 segment (freelancers) is paid in USD, not PKR — pricing shown in their own currency rather than forcing a mental conversion.
+
+---
+
+## Why This Wins
+
+| Criteria | Munshi |
+|---|---|
+| Real, sharp, underserved problem | Yes — 2.3M+ freelancers, $1.76B in export earnings, zero tools built for this payment reality |
+| Technical depth beyond "AI wrapper" | Yes — cache-first cost architecture, historical multi-currency conversion, RLS + field-level encryption, legally-scoped tax module |
+| Market specificity (moat) | Yes — no Western tool reads Meezan/JazzCash/Payoneer formats or ships Urdu-first |
+| Financial inclusion impact | Yes — turns informal, undocumented income into a structured record that can eventually support credit and loan access |
+| Scalable | Yes — freelancers → shopkeepers → platform/B2B, same core engine |
+| Responsible AI scoping | Yes — deliberately declined to build a full tax calculator; awareness over advice, everywhere |
+
+---
+
+## Team
+
+**Marriyam Andeel** — Co-Founder. BS Artificial Intelligence, COMSATS Lahore. Hands-on across product and engineering.
+📧 marriyamandeel07@gmail.com · [linkedin.com/in/marriyam-andeel](https://linkedin.com/in/marriyam-andeel)
+
+**Amna Kousar** — Co-Founder. BS Artificial Intelligence, COMSATS Lahore. Hands-on across product and engineering.
+📧 amnakousarbandesha@gmail.com · [linkedin.com/in/amna-kousar](https://linkedin.com/in/amna-kousar)
+
+We build side by side: one of us ships a feature, the other tests it end-to-end and pushes back, then we swap. Every milestone in this repo passed through that loop.
+
+---
+
+## Full Documentation
+
+Detailed design docs live in [`/docs`](./docs):
+- `01-overview.md` — product overview and scope
+- `02-architecture.md` — full system design, build-now vs. coming-soon
+- `03-categorization-and-ai-behavior.md` — categorization logic, LLM usage, FBR scope
+- `04-database-schema.md` — data model, RLS, access control design
+- `05-setup.md` — local development setup
+- `06-roadmap-and-limitations.md` — honest status of what's shipped vs. designed
+
+---
+
+*This is an organizing and awareness tool. Munshi does not file taxes and does not give certified financial or legal advice. Consult a CA for official filing.*
