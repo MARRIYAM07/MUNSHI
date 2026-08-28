@@ -68,7 +68,7 @@ User uploads payment screenshot / PDF / forwards a WhatsApp message
 ```
 INGESTION                    PROCESSING                  OUTPUT
 ┌───────────────┐      ┌──────────────────┐      ┌─────────────────────┐
-│ Screenshot/PDF │ ──▶  │ Claude Vision     │      │ Dashboard:           │
+│ Screenshot/PDF │ ──▶  │ LLM Vision     │      │ Dashboard:           │
 │ upload         │      │ extraction        │      │  · Monthly total(PKR)│
 └───────────────┘      └────────┬─────────┘      │  · Non-filer flag     │
 ┌───────────────┐               ▼                 │  · Transaction list   │
@@ -78,7 +78,7 @@ INGESTION                    PROCESSING                  OUTPUT
 └───────────────┘      └────────┬─────────┘
 ┌───────────────┐               ▼ (cache miss)
 │ JazzCash       │      ┌──────────────────┐      ┌─────────────────────┐
-│ SMS-forward    │ ──▶  │ Claude Haiku      │ ──▶  │ Ledger (Supabase,    │
+│ SMS-forward    │ ──▶  │ LLM/AI      │ ──▶  │ Ledger (Supabase,    │
 └───────────────┘      │ categorization    │      │ RLS-enforced,        │
 ┌───────────────┐      └──────────────────┘      │ field-level encrypted)│
 │ WhatsApp       │                                 └─────────────────────┘
