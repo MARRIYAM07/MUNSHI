@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 
 const ROWS = [
   ["03 Aug — Payoneer Payout", "PKR 184,500"],
@@ -13,50 +14,42 @@ const STAGGER_MS = 180;
 const LOOP_MS = 7000;
 
 export function IngestDemo() {
-  // step: -1 = idle, 0 = scanning, 1..ROWS.length = rows revealed so far,
-  // ROWS.length+1 = stamp shown
   const [step, setStep] = useState(-1);
+  const [statusText, setStatusText] = useState("Drop a statement or screenshot");
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const showToast = useToast();
+
+  const runDemo = () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setStatusText("Reading statement...");
+    setStep(0);
+
+    timersRef.current.push(
+      setTimeout(() => {
+        ROWS.forEach((_, i) => {
+          timersRef.current.push(setTimeout(() => setStep(i + 1), i * STAGGER_MS));
+        });
+        timersRef.current.push(
+          setTimeout(() => setStep(ROWS.length + 1), ROWS.length * STAGGER_MS + 200)
+        );
+      }, 1000)
+    );
+  };
 
   useEffect(() => {
     const prefersReduced =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     if (prefersReduced) {
+      setStatusText("Extracted entries:");
       setStep(ROWS.length + 1);
       return;
     }
 
-    let timers: ReturnType<typeof setTimeout>[] = [];
-
-    function run() {
-      setStep(0);
-      timers.push(
-        setTimeout(() => {
-          ROWS.forEach((_, i) => {
-            timers.push(
-              setTimeout(() => setStep(i + 1), i * STAGGER_MS)
-            );
-          });
-          timers.push(
-            setTimeout(
-              () => setStep(ROWS.length + 1),
-              ROWS.length * STAGGER_MS + 200
-            )
-          );
-        }, 1400)
-      );
-    }
-
-    run();
-    const loop = setInterval(() => {
-      timers.forEach(clearTimeout);
-      timers = [];
-      run();
-    }, LOOP_MS);
-
     return () => {
-      clearInterval(loop);
-      timers.forEach(clearTimeout);
+      timersRef.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -65,7 +58,22 @@ export function IngestDemo() {
   const stampShown = step > ROWS.length;
 
   return (
-    <div className="drop-mock">
+    <div
+      className="drop-mock"
+      onClick={() => {
+        runDemo();
+        showToast("Statement imported — Munshi is extracting entries.");
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          runDemo();
+          showToast("Statement imported — Munshi is extracting entries.");
+        }
+      }}
+    >
       <div className="scan-area">
         <div className="doc-lines">
           <div />
@@ -76,7 +84,7 @@ export function IngestDemo() {
         </div>
         <div className={`scan-line${scanning ? " active" : ""}`} />
       </div>
-      <div className="dz-label">Extracted entries:</div>
+      <div className="dz-label">{statusText}</div>
       <div className="extract-list">
         {ROWS.map((row, i) => (
           <div className={`erow${i < rowsShown ? " show" : ""}`} key={row[0]}>
@@ -86,7 +94,7 @@ export function IngestDemo() {
         ))}
       </div>
       <div className={`stamp-note${stampShown ? " show" : ""}`}>
-        4 entries extracted, folio 02
+        4 entries extracted, Folio 02
       </div>
     </div>
   );
