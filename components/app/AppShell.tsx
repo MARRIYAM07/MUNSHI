@@ -1,5 +1,6 @@
 import {Fragment,type ReactNode} from "react";
-import {signOut} from "@/app/actions/auth";
+import {DeleteAccountControl} from "@/components/app/DeleteAccountControl";
+import {SignOutControl} from "@/components/app/SignOutControl";
 
 export type AppNavItem={
   id:string;
@@ -17,11 +18,12 @@ export type AppShellProps={
   brand?:ReactNode;
   topActions?:ReactNode;
   sidebarFooter?:ReactNode;
+  businessId?:string;
   banner?:ReactNode;
   children:ReactNode;
 };
 
-export function AppShell({navItems,activeItemId,title,subtitle,brand,topActions,sidebarFooter,banner,children}:AppShellProps){
+export function AppShell({navItems,activeItemId,title,subtitle,brand,topActions,sidebarFooter,banner,businessId,children}:AppShellProps){
   let currentGroup:string|undefined;
 
   return <>
@@ -47,7 +49,8 @@ export function AppShell({navItems,activeItemId,title,subtitle,brand,topActions,
         </nav>
         <div className="side-foot">
           {sidebarFooter}
-          <form action={signOut}><button className="side-link" type="submit"><span className="ic" aria-hidden="true">↪</span><span className="lbl">Sign out</span></button></form>
+          <SignOutControl />
+          {businessId ? <DeleteAccountControl businessId={businessId} /> : null}
         </div>
       </aside>
       <header className="top">

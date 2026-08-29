@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 
 function nextDeadline() {
   const now = new Date();
-  let d = new Date(Date.UTC(now.getUTCFullYear(), 8, 30, 23, 59, 59));
-  if (now > d) d = new Date(Date.UTC(now.getUTCFullYear() + 1, 8, 30, 23, 59, 59));
-  return d;
+  let deadline = new Date(Date.UTC(now.getUTCFullYear(), 8, 30, 23, 59, 59));
+  if (now > deadline) {
+    deadline = new Date(Date.UTC(now.getUTCFullYear() + 1, 8, 30, 23, 59, 59));
+  }
+  return deadline;
 }
 
 function compute() {
@@ -20,13 +22,13 @@ function compute() {
 
 const PLACEHOLDER = { days: "--", hours: "--", mins: "--" };
 
-export function FilingCountdown() {
+export function FilingCountdownClient() {
   const [value, setValue] = useState(PLACEHOLDER);
 
   useEffect(() => {
     setValue(compute());
-    const id = setInterval(() => setValue(compute()), 1000);
-    return () => clearInterval(id);
+    const interval = window.setInterval(() => setValue(compute()), 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   return (
@@ -44,18 +46,5 @@ export function FilingCountdown() {
         <div className="cd-sub">Mins</div>
       </div>
     </div>
-
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-

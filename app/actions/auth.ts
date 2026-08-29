@@ -93,8 +93,11 @@ export async function signUp(formData: FormData) {
   redirect(destination(plan, cycle));
 }
 
-export async function signOut() {
+export async function signOut(_formData: FormData) {
   const db = await userDb();
-  await db.auth.signOut();
+  const { error } = await db.auth.signOut();
+  if (error && error.message !== "Auth session missing!") {
+    console.error("signOut failed", { message: error.message, code: error.code });
+  }
   redirect("/login");
 }
