@@ -704,8 +704,8 @@ It is to become the **financial record layer** that makes informal income more v
 | Plan      |     Price | Intended Features                             |
 | --------- | --------: | --------------------------------------------- |
 | **Free**  |        $0 | Limited monthly transactions                  |
-| **Pro**   | $12/month | Unlimited uploads, history, advanced features |
-| **Teams** | $25/month | Multi-user functionality                      |
+| **Pro**   | $10/month | Unlimited uploads, history, advanced features |
+| **Teams** | $30/month | Multi-user functionality                      |
 
 Pricing will be validated against actual user behavior and willingness to pay during product development.
 
