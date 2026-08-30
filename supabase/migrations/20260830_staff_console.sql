@@ -27,6 +27,7 @@ create table if not exists public.audit_logs (
 create table if not exists public.coupons (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
+  discount_description text not null default '',
   discount text,
   redemptions_count integer not null default 0,
   max_redemptions integer not null default 250,
@@ -34,6 +35,9 @@ create table if not exists public.coupons (
   created_at timestamptz not null default now()
 );
 
+-- Ensure both column variations exist and satisfy nullability
+alter table public.coupons add column if not exists discount_description text;
+alter table public.coupons alter column discount_description drop not null;
 alter table public.coupons add column if not exists discount text;
 alter table public.coupons add column if not exists redemptions_count integer default 0;
 alter table public.coupons add column if not exists max_redemptions integer default 250;
@@ -79,12 +83,17 @@ on conflict (key) do update set
   is_enabled = excluded.is_enabled,
   updated_at = now();
 
-insert into public.coupons (code, discount, redemptions_count, max_redemptions, expires_at)
+insert into public.coupons (code, discount, discount_description, redemptions_count, max_redemptions, expires_at)
 values
-  ('LAUNCH50', '50% off Pro', 184, 300, '2026-10-31T00:00:00Z'),
-  ('STUDENTPK', '20% off Pro', 90, 200, '2026-09-10T00:00:00Z'),
-  ('REFERRAL10', '10% off Teams', 122, 500, '2026-11-17T00:00:00Z')
-on conflict (code) do nothing;
+  ('LAUNCH50', '50% off Pro', '50% off Pro', 184, 300, '2026-10-31T00:00:00Z'),
+  ('STUDENTPK', '20% off Pro', '20% off Pro', 90, 200, '2026-09-10T00:00:00Z'),
+  ('REFERRAL10', '10% off Teams', '10% off Teams', 122, 500, '2026-11-17T00:00:00Z')
+on conflict (code) do update set
+  discount = excluded.discount,
+  discount_description = excluded.discount_description,
+  redemptions_count = excluded.redemptions_count,
+  max_redemptions = excluded.max_redemptions,
+  expires_at = excluded.expires_at;
 
 insert into public.audit_logs (actor_name, action, details, created_at)
 values
@@ -105,18 +114,40 @@ alter table public.audit_logs enable row level security;
 alter table public.coupons enable row level security;
 alter table public.feature_flags enable row level security;
 
-create policy if not exists "broadcasts_service_role_all" on public.broadcasts for all to service_role using (true) with check (true);
-create policy if not exists "broadcasts_staff_all" on public.broadcasts for all to authenticated using (public.is_staff()) with check (public.is_staff());
+-- Broadcasts Policies
+drop policy if exists "broadcasts_service_role_all" on public.broadcasts;
+create policy "broadcasts_service_role_all" on public.broadcasts for all to service_role using (true) with check (true);
 
-create policy if not exists "support_tickets_service_role_all" on public.support_tickets for all to service_role using (true) with check (true);
-create policy if not exists "support_tickets_staff_all" on public.support_tickets for all to authenticated using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "broadcasts_staff_all" on public.broadcasts;
+create policy "broadcasts_staff_all" on public.broadcasts for all to authenticated using (public.is_staff()) with check (public.is_staff());
 
-create policy if not exists "audit_logs_service_role_all" on public.audit_logs for all to service_role using (true) with check (true);
-create policy if not exists "audit_logs_staff_read" on public.audit_logs for select to authenticated using (public.is_staff());
-create policy if not exists "audit_logs_staff_insert" on public.audit_logs for insert to authenticated with check (public.is_staff());
+-- Support Tickets Policies
+drop policy if exists "support_tickets_service_role_all" on public.support_tickets;
+create policy "support_tickets_service_role_all" on public.support_tickets for all to service_role using (true) with check (true);
 
-create policy if not exists "coupons_service_role_all" on public.coupons for all to service_role using (true) with check (true);
-create policy if not exists "coupons_staff_all" on public.coupons for all to authenticated using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "support_tickets_staff_all" on public.support_tickets;
+create policy "support_tickets_staff_all" on public.support_tickets for all to authenticated using (public.is_staff()) with check (public.is_staff());
 
-create policy if not exists "feature_flags_service_role_all" on public.feature_flags for all to service_role using (true) with check (true);
-create policy if not exists "feature_flags_staff_all" on public.feature_flags for all to authenticated using (public.is_staff()) with check (public.is_staff());
+-- Audit Logs Policies
+drop policy if exists "audit_logs_service_role_all" on public.audit_logs;
+create policy "audit_logs_service_role_all" on public.audit_logs for all to service_role using (true) with check (true);
+
+drop policy if exists "audit_logs_staff_read" on public.audit_logs;
+create policy "audit_logs_staff_read" on public.audit_logs for select to authenticated using (public.is_staff());
+
+drop policy if exists "audit_logs_staff_insert" on public.audit_logs;
+create policy "audit_logs_staff_insert" on public.audit_logs for insert to authenticated with check (public.is_staff());
+
+-- Coupons Policies
+drop policy if exists "coupons_service_role_all" on public.coupons;
+create policy "coupons_service_role_all" on public.coupons for all to service_role using (true) with check (true);
+
+drop policy if exists "coupons_staff_all" on public.coupons;
+create policy "coupons_staff_all" on public.coupons for all to authenticated using (public.is_staff()) with check (public.is_staff());
+
+-- Feature Flags Policies
+drop policy if exists "feature_flags_service_role_all" on public.feature_flags;
+create policy "feature_flags_service_role_all" on public.feature_flags for all to service_role using (true) with check (true);
+
+drop policy if exists "feature_flags_staff_all" on public.feature_flags;
+create policy "feature_flags_staff_all" on public.feature_flags for all to authenticated using (public.is_staff()) with check (public.is_staff());

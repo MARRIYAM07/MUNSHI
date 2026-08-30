@@ -181,13 +181,18 @@ function FolioOverview() {
   }, [open]);
 
   return <div className={`folio-card${open ? " is-open" : ""}`}>
-    <button type="button" className="folio-summary" onClick={() => setOpen((current) => !current)}>
+    <div className="folio-summary" role="button" tabIndex={0} onClick={() => setOpen((current) => !current)} onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setOpen((current) => !current);
+      }
+    }}>
       <div className="folio-label">Folio 01 — Overview</div>
       <h3>The Sunday-night page.</h3>
       <p className="fc-desc">One page, checked once a week — income so far, what&apos;s still uncategorized, and who still owes you.</p>
       <MiniStrip items={[{ value: "397,700", label: "Income, Aug" }, { value: "1", label: "Needs review", warn: true }, { value: "2", label: "Clients owing" }]} />
       <span className="open-toggle"><span className="arrow">▾</span>{open ? "Close this screen" : "Open this screen"}</span>
-    </button>
+    </div>
     <div className={`folio-expand-inner${open ? " open" : ""}`}>
       <MiniStrip items={[{ value: summary.income.toLocaleString("en-US"), label: "Income, PKR" }, { value: String(summary.review), label: "Needs review", warn: true }, { value: summary.owed.toLocaleString("en-US"), label: "Owed by clients" }]} />
       <div className="folio-ledger">
@@ -203,13 +208,18 @@ function Folio({ number, title, description, preview, children }: { number: stri
   const [open, setOpen] = useState(false);
 
   return <Reveal><div className={`folio-card${open ? " is-open" : ""}`}>
-    <button type="button" className="folio-summary" onClick={() => setOpen((current) => !current)}>
+    <div className="folio-summary" role="button" tabIndex={0} onClick={() => setOpen((current) => !current)} onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setOpen((current) => !current);
+      }
+    }}>
       <div className="folio-label">{number}</div>
       <h3>{title}</h3>
       <p className="fc-desc">{description}</p>
       {preview}
       <span className="open-toggle"><span className="arrow">▾</span>{open ? "Close this screen" : "Open this screen"}</span>
-    </button>
+    </div>
     <div className={`folio-expand-inner${open ? " open" : ""}`}>
       {children}
     </div>
@@ -230,9 +240,7 @@ function CategoryDemo() {
       return nextRows;
     });
     setOpenRowId(null);
-    const selectedRow = rows.find((row) => row.id === rowId);
-    const merchant = selectedRow?.description?.split("—")?.[1]?.trim() ?? "Ahsan Bhai";
-    showToast(`Munshi will remember this for '${merchant}' next time.`);
+    showToast(`Categorized as ${nextCategory} — Munshi will remember this.`);
   };
 
   const categoryColumns: readonly LedgerColumn<CategoryRow>[] = [
@@ -241,14 +249,22 @@ function CategoryDemo() {
     { id: "amount", header: "Amount", headerClassName: "amount-head", className: (row) => `amt-cell ${row.credit ? "credit" : "debit"}`, render: (row) => row.amount },
     { id: "category", header: "Category", render: (row) => (
       <div style={{ position: "relative" }}>
-        <button type="button" className="cat-pill" aria-expanded={openRowId === row.id} onClick={() => setOpenRowId((current) => current === row.id ? null : row.id)}>
+        <button type="button" className="cat-pill" aria-expanded={openRowId === row.id} onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpenRowId((current) => current === row.id ? null : row.id);
+        }}>
           <span className={`conf-dot ${row.confidence}`} aria-hidden="true" />
           {row.category}
         </button>
         {openRowId === row.id ? (
           <div className="cat-dropdown open">
             {categoryOptions.map((category) => (
-              <button key={category} type="button" onClick={() => handleCategorySelect(row.id, category)}>
+              <button key={category} type="button" onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                handleCategorySelect(row.id, category);
+              }}>
                 {category}
               </button>
             ))}
@@ -290,8 +306,8 @@ function ExportButtonDemo() {
     setIsPreparing(true);
     window.setTimeout(() => {
       setIsPreparing(false);
-      showToast("✓ Summary exported — Aug 2026, Folio 04");
-    }, 1200);
+      showToast("FBR summary exported.");
+    }, 900);
   };
 
   return <button className="export-btn" type="button" onClick={handleExport}><span className={`export-state ${isPreparing ? "is-loading" : ""}`} />{isPreparing ? "Preparing summary..." : "Export FBR summary"}</button>;
@@ -321,22 +337,15 @@ function ApprovalDemo({ onCountChange }: { onCountChange?: (value: number) => vo
     const target = approvals.find((approval) => approval.id === id);
     if (!target || target.status !== "pending") return;
 
+    const nextStatus = decision === "approve" ? "approved" : "declined";
+    setApprovals((currentApprovals) => currentApprovals.map((approval) => approval.id === id ? { ...approval, status: nextStatus } : approval));
+
     if (decision === "approve") {
-      setApprovals((currentApprovals) => currentApprovals.map((approval) => approval.id === id ? { ...approval, status: "processing" } : approval));
-      const isBill = id === "approval-bill";
-      window.setTimeout(() => {
-        setApprovals((currentApprovals) => currentApprovals.map((approval) => approval.id === id ? { ...approval, status: "approved" } : approval));
-        showToast(isBill ? "LESCO bill marked as paid." : "Client refund approved.");
-      }, 650);
+      showToast(id === "approval-bill" ? "Approved — LESCO bill paid via demo rail." : "Approved — client refund queued.");
       return;
     }
 
-    setApprovals((currentApprovals) => currentApprovals.map((approval) => approval.id === id ? { ...approval, status: "declined" } : approval));
-    if (id === "approval-bill") {
-      showToast("LESCO bill declined.");
-      return;
-    }
-    showToast("Client refund declined.");
+    showToast(id === "approval-bill" ? "Declined — LESCO bill was not sent." : "Declined — client payout was not sent.");
   };
 
   const pendingCount = approvals.filter((approval) => approval.status === "pending").length;
@@ -348,10 +357,9 @@ function ApprovalDemo({ onCountChange }: { onCountChange?: (value: number) => vo
   return (
     <>
       {approvals.map((approval) => {
-        const isProcessing = approval.status === "processing";
         const isApproved = approval.status === "approved";
         const isDeclined = approval.status === "declined";
-        const resolved = isProcessing || isApproved || isDeclined;
+        const resolved = isApproved || isDeclined;
 
         return (
           <div key={approval.id} className={`approval-card${resolved ? " resolved" : ""}`}>
@@ -363,21 +371,9 @@ function ApprovalDemo({ onCountChange }: { onCountChange?: (value: number) => vo
             <div className="approval-amt mono">{approval.amount}</div>
             <div className="approval-due mono">{approval.due}</div>
 
-            {isProcessing ? (
-              <div className="approval-status show" style={{ marginTop: 12, color: "var(--forest)" }}>
-                Sending approval to payment partner...
-              </div>
-            ) : isApproved ? (
-              <div className="approval-status show" style={{ marginTop: 12, color: "var(--forest)" }}>
-                {approval.id === "approval-bill"
-                  ? "✓ Approved — LESCO bill paid via demo rail (no real funds moved)."
-                  : "✓ Approved — PKR 15,000 refund queued for payment partner."}
-              </div>
-            ) : isDeclined ? (
-              <div className="approval-status show" style={{ marginTop: 12, color: "var(--red)" }}>
-                {approval.id === "approval-bill"
-                  ? "Declined — LESCO bill was not sent."
-                  : "Declined — client payout was not sent."}
+            {resolved ? (
+              <div className="approval-status show" style={{ marginTop: 12, color: isApproved ? "var(--forest)" : "var(--red)" }}>
+                {isApproved ? "Approved" : "Declined"}
               </div>
             ) : (
               <div className="approval-actions">

@@ -150,10 +150,30 @@ export async function fetchSubscribers(query?: string, plan?: string): Promise<S
   }
 }
 
+export async function fetchSupportTickets(): Promise<Array<{ priority: string; name: string; description: string; key: string }>> {
+  try {
+    const db = adminDb() as any;
+    const { data, error } = await db.from("support_tickets").select("user_name, issue, priority, status, created_at").order("created_at", { ascending: false }).limit(20);
+    if (error || !data) throw new Error(error?.message || "No support tickets");
+    return (data as Array<{ user_name: string; issue: string; priority: string; status?: string; created_at?: string }>).map((ticket) => ({
+      priority: ticket.priority || "Medium",
+      name: ticket.user_name || "Unknown user",
+      description: ticket.issue || "Support request",
+      key: (ticket.priority || "medium").toLowerCase(),
+    }));
+  } catch {
+    return [
+      { priority: "High", name: "Areeba Waseem", description: "Upwork payout missing from August export", key: "high" },
+      { priority: "Medium", name: "Nadir Ashraf", description: "Need help restoring a cancelled renewal", key: "med" },
+      { priority: "Low", name: "Hina Yousaf", description: "Question about invoice formatting for 2025", key: "low" },
+    ];
+  }
+}
+
 export async function fetchFeatureFlags(): Promise<Record<string, boolean>> {
   try {
     const db = adminDb() as any;
-    const { data, error } = await db.from("feature_flags").select("key, is_enabled, enabled");
+    const { data, error } = await db.from("feature_flags").select("key, is_enabled, name, description, target_plan");
     if (error || !data) throw new Error(error?.message || "No flags");
     const parsed = data as Array<{ key: string; is_enabled?: boolean; enabled?: boolean }>;
     const result: Record<string, boolean> = { ...fallbackFlags } as Record<string, boolean>;
@@ -171,12 +191,12 @@ export async function fetchFeatureFlags(): Promise<Record<string, boolean>> {
 export async function fetchAuditLogs(): Promise<Array<{ actor: string; time: string; detail: string }>> {
   try {
     const db = adminDb() as any;
-    const { data, error } = await (db.from as any)("audit_log").select("actor_name, action, created_at").order("created_at", { ascending: false }).limit(10);
+    const { data, error } = await db.from("audit_logs").select("actor_name, action, details, created_at").order("created_at", { ascending: false }).limit(10);
     if (error || !data) throw new Error(error?.message || "No audit logs");
-    return (data as Array<{ actor_name: string; action: string; created_at: string }>).map((entry) => ({
+    return (data as Array<{ actor_name: string; action: string; details?: string; created_at: string }>).map((entry) => ({
       actor: entry.actor_name || "System",
       time: new Date(entry.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      detail: entry.action || "Updated staff console state",
+      detail: entry.details || entry.action || "Updated staff console state",
     }));
   } catch {
     return fallbackAudit;
@@ -186,12 +206,12 @@ export async function fetchAuditLogs(): Promise<Array<{ actor: string; time: str
 export async function fetchCoupons(): Promise<Array<{ code: string; discount: string; redemptions: string; expiry: string }>> {
   try {
     const db = adminDb() as any;
-    const { data, error } = await (db.from as any)("coupons").select("code, discount, discount_description, redemptions_count, redemption_count, max_redemptions, redemption_limit, expires_at").order("created_at", { ascending: false }).limit(20);
+    const { data, error } = await db.from("coupons").select("code, discount, discount_description, redemptions_count, max_redemptions, expires_at, created_at").order("created_at", { ascending: false }).limit(20);
     if (error || !data) throw new Error(error?.message || "No coupons");
-    return (data as Array<{ code: string; discount?: string; discount_description?: string; redemptions_count?: number; redemption_count?: number; max_redemptions?: number; redemption_limit?: number; expires_at?: string }>).map((row) => ({
+    return (data as Array<{ code: string; discount?: string; discount_description?: string; redemptions_count?: number; max_redemptions?: number; expires_at?: string; created_at?: string }>).map((row) => ({
       code: row.code,
       discount: row.discount || row.discount_description || "Offer",
-      redemptions: `${String(row.redemptions_count ?? row.redemption_count ?? 0)} / ${String(row.max_redemptions ?? row.redemption_limit ?? 250)}`,
+      redemptions: `${String(row.redemptions_count ?? 0)} / ${String(row.max_redemptions ?? 250)}`,
       expiry: row.expires_at ? new Date(row.expires_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—",
     }));
   } catch {
@@ -216,25 +236,8 @@ export async function createCouponAction(formData: FormData | { code: string; di
 
   try {
     const db = adminDb() as any;
-    const insertRow = {
-      code: code.toUpperCase(),
-      discount,
-      redemptions_count: 0,
-      max_redemptions: 250,
-      expires_at: expiresAt,
-    };
-    const { error } = await (db.from as any)("coupons").insert([insertRow]);
-    if (error) {
-      const fallbackRow = {
-        code: code.toUpperCase(),
-        discount_description: discount,
-        redemption_limit: 250,
-        redemption_count: 0,
-        expires_at: expiresAt,
-      };
-      const alternative = await (db.from as any)("coupons").insert([fallbackRow]);
-      if (alternative.error) throw new Error(alternative.error.message);
-    }
+    const { error } = await db.from("coupons").insert([{ code: code.toUpperCase(), discount, discount_description: discount, redemptions_count: 0, max_redemptions: 250, expires_at: expiresAt }]);
+    if (error) throw new Error(error.message);
   } catch {
     // keep the UI responsive even when the Supabase environment is not configured
   }
@@ -251,20 +254,15 @@ export async function createCouponAction(formData: FormData | { code: string; di
 export async function toggleFeatureFlagAction(flagKey: string, isEnabled: boolean) {
   try {
     const db = adminDb() as any;
-    const updateRow = {
+    const { error } = await db.from("feature_flags").upsert({
       key: flagKey,
       name: flagKey,
       description: flagKey,
       target_plan: "all",
       is_enabled: isEnabled,
       updated_at: new Date().toISOString(),
-    };
-    const { error } = await (db.from as any)("feature_flags").upsert(updateRow, { onConflict: "key" });
-    if (error) {
-      const fallbackUpdate = { key: flagKey, enabled: isEnabled, rollout_plan: ["all"], updated_at: new Date().toISOString() };
-      const alt = await (db.from as any)("feature_flags").upsert(fallbackUpdate as Record<string, unknown>, { onConflict: "key" });
-      if (alt.error) throw new Error(alt.error.message);
-    }
+    }, { onConflict: "key" });
+    if (error) throw new Error(error.message);
   } catch {
     // continue with the mock UI state if Supabase isn't configured
   }
@@ -285,7 +283,7 @@ export async function sendBroadcastAction(audience: string, message: string) {
 
   try {
     const db = adminDb() as any;
-    const { error } = await (db.from as any)("broadcasts").insert({ audience, message: sanitizedMessage, sent_at: new Date().toISOString() });
+    const { error } = await db.from("broadcasts").insert({ audience, message: sanitizedMessage, sent_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
   } catch {
     // gracefully fall back to the demo flow when no database is configured
@@ -297,3 +295,4 @@ export async function sendBroadcastAction(audience: string, message: string) {
     message: "Announcement sent to selected audience",
   };
 }
+

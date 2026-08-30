@@ -181,6 +181,8 @@ export default function StaffPage() {
   const [coupons, setCoupons] = useState(initialCoupons);
   const [newCoupon, setNewCoupon] = useState({ code: "", discount: "", expiry: "2026-09-30" });
   const [flags, setFlags] = useState(initialFlags);
+  const [auditLogs, setAuditLogs] = useState(initialAudit);
+  const [supportRows, setSupportRows] = useState(supportTickets);
   const toast = useToast();
 
   useEffect(() => {
@@ -189,6 +191,22 @@ export default function StaffPage() {
     if (stored === "true") {
       setUnlocked(true);
     }
+
+    const loadStaffData = async () => {
+      const [nextFlags, nextCoupons, nextAuditLogs, nextSupportTickets] = await Promise.all([
+        import("./actions").then((mod) => mod.fetchFeatureFlags()),
+        import("./actions").then((mod) => mod.fetchCoupons()),
+        import("./actions").then((mod) => mod.fetchAuditLogs()),
+        import("./actions").then((mod) => mod.fetchSupportTickets()),
+      ]);
+
+      setFlags((current) => ({ ...current, ...nextFlags }));
+      setCoupons(nextCoupons.length ? nextCoupons : initialCoupons);
+      setAuditLogs(nextAuditLogs.length ? nextAuditLogs : initialAudit);
+      setSupportRows(nextSupportTickets.length ? nextSupportTickets : supportTickets);
+    };
+
+    loadStaffData();
   }, []);
 
   const filteredSubscribers = useMemo(() => {
@@ -232,15 +250,24 @@ export default function StaffPage() {
     }
   };
 
-  const handleCreateCoupon = () => {
+  const handleCreateCoupon = async () => {
     const code = newCoupon.code.trim();
     if (!code || !newCoupon.discount.trim()) {
       toast("Code and discount are required.");
       return;
     }
-    setCoupons((current) => [{ code: code.toUpperCase(), discount: newCoupon.discount, redemptions: "0 / 250", expiry: newCoupon.expiry }, ...current]);
-    setNewCoupon({ code: "", discount: "", expiry: "2026-09-30" });
-    toast("Coupon created");
+
+    const result = await import("./actions").then((mod) => mod.createCouponAction({ code, discount: newCoupon.discount, expiresAt: newCoupon.expiry }));
+    if (result.ok) {
+      const createdCode = result.code ?? code.toUpperCase();
+      const createdDiscount = result.discount ?? newCoupon.discount;
+      setCoupons((current) => [{ code: createdCode, discount: createdDiscount, redemptions: "0 / 250", expiry: newCoupon.expiry }, ...current]);
+      setNewCoupon({ code: "", discount: "", expiry: "2026-09-30" });
+      toast(result.message || "Coupon created");
+      return;
+    }
+
+    toast(result.message || "Code and discount are required.");
   };
 
   const renderTabContent = () => {
@@ -550,9 +577,17 @@ export default function StaffPage() {
             <button
               type="button"
               className="btn"
-              onClick={() => {
-                toast("Announcement sent to selected audience");
-                setAnnouncement("");
+              onClick={async () => {
+                if (!announcement.trim()) {
+                  toast("Message cannot be empty.");
+                  return;
+                }
+
+                const result = await import("./actions").then((mod) => mod.sendBroadcastAction(broadcastAudience, announcement));
+                toast(result.message || "Announcement sent to selected audience");
+                if (result.ok) {
+                  setAnnouncement("");
+                }
               }}
             >
               Send announcement
@@ -621,7 +656,7 @@ export default function StaffPage() {
               <span className="sub">14 open</span>
             </div>
             <div className="support-list">
-              {supportTickets.map((ticket) => (
+              {supportRows.map((ticket) => (
                 <div key={ticket.name} className="ticket-row">
                   <span className={`tk-badge ${ticket.key}`}>{ticket.priority}</span>
                   <div className="exp-info">
@@ -662,9 +697,10 @@ export default function StaffPage() {
                   <ToggleSwitch
                     checked={flags[key as keyof typeof flags]}
                     label={label}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={async (checked) => {
                       setFlags((current) => ({ ...current, [key]: checked }));
-                      toast(`${label} ${checked ? "enabled" : "disabled"}.`);
+                      const result = await import("./actions").then((mod) => mod.toggleFeatureFlagAction(key, checked));
+                      toast(result.message || `${label} ${checked ? "enabled" : "disabled"}.`);
                     }}
                   />
                 </div>
@@ -683,7 +719,7 @@ export default function StaffPage() {
             <span className="sub">Recent staff actions</span>
           </div>
           <div className="audit-list">
-            {initialAudit.map((log) => (
+            {auditLogs.map((log) => (
               <div key={`${log.actor}-${log.time}-${log.detail}`} className="log-row">
                 <span className="time">{log.time}</span>
                 <span className="who">{log.actor}</span>
