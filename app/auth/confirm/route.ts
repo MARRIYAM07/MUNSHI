@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   const businessName = typeof metadata.business_name === "string" ? metadata.business_name : "My business";
   const currency = typeof metadata.currency === "string" ? metadata.currency : "PKR";
   const memberEmails = Array.isArray(metadata.member_emails) ? metadata.member_emails.filter((item): item is string => typeof item === "string").slice(0, 4) : [];
-  const { data: businessId, error: businessError } = await supabase.rpc("create_business", { business_name: businessName, business_currency: currency, business_plan: plan, cycle });
+  const { data: businessId, error: businessError } = await supabase.rpc("create_business", { business_name: businessName, business_currency: currency, business_plan: "khata", cycle: "monthly" });
   if (businessError || !businessId) return NextResponse.redirect(new URL("/signup?error=Could+not+create+your+business", request.url));
   if (memberEmails.length) await supabase.from("team_members").insert(memberEmails.map((invited_email) => ({ business_id: businessId, invited_email, role: "member", status: "pending" })));
 

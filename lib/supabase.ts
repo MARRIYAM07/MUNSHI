@@ -30,10 +30,3 @@ export async function requireMember(businessId:string) {
   if (!data) throw new Response("Forbidden", {status:403});
   return { db, user, role: data.role as "owner"|"member" };
 }
-
-export async function requireStaff() {
-  const { db, user } = await requireUser();
-  const { data } = await db.from("staff_users").select("user_id").eq("user_id",user.id).maybeSingle();
-  if (!data) throw new Response("Forbidden",{status:403});
-  return {db,user};
-}

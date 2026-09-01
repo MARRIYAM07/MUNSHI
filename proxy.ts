@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/staff")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,7 +24,8 @@ export async function proxy(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  const protectedPath = request.nextUrl.pathname.startsWith("/dashboard");
+  if (!user && protectedPath) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);

@@ -1,75 +1,59 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { useToast } from "@/components/ui/Toast";
 
 export type ClientReminderRow = {
   id: string;
   name: string;
-  source: string;
-  contact_email: string;
-  contact_whatsapp: string;
-  next_reminder_at?: string | null;
-  retainer_note: string;
-  invoiceCount: number;
+  contactEmail: string;
+  retainerType: string;
+  amountDue: number;
+  dueDate?: string | null;
+  nextReminderAt?: string | null;
   transactionCount: number;
-  arrears: number;
 };
 
+type ReminderState = "idle" | "sent" | "scheduled";
+
+function dueLabel(amountDue: number, dueDate?: string | null) {
+  if (!amountDue) return "Paid";
+  if (!dueDate) return "Due soon";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${dueDate}T00:00:00`);
+  const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
+  if (diff < 0) return `${Math.abs(diff)} ${Math.abs(diff) === 1 ? "day" : "days"} late`;
+  if (diff === 0) return "Due today";
+  return `Due in ${diff} ${diff === 1 ? "day" : "days"}`;
+}
+
 export function ClientReminderActions({ initialRows }: { initialRows: ClientReminderRow[] }) {
-  const [rows, setRows] = useState<Record<string, "idle" | "queued" | "sent">>({});
+  const [states, setStates] = useState<Record<string, ReminderState>>({});
   const showToast = useToast();
 
-  function queueReminder(id: string, name: string) {
-    setRows((current) => ({ ...current, [id]: "queued" }));
-    showToast(`Reminder queued for ${name}.`);
-    window.setTimeout(() => {
-      setRows((current) => ({ ...current, [id]: "sent" }));
-    }, 900);
+  function updateReminder(client: ClientReminderRow) {
+    if (!client.amountDue) return;
+    const next = client.dueDate && new Date(`${client.dueDate}T00:00:00`) > new Date() ? "scheduled" : "sent";
+    setStates((current) => ({ ...current, [client.id]: next }));
+    showToast(next === "sent" ? `Reminder sent to ${client.name}` : `Reminder scheduled for ${client.name}`);
   }
 
   return (
-    <>
-      {initialRows.map((client) => {
-        const reminderState = rows[client.id] ?? "idle";
-        const nextReminder = client.next_reminder_at ? new Date(client.next_reminder_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Karachi" }) : "—";
-        const actionLabel = reminderState === "queued" ? "Queued" : reminderState === "sent" ? "Sent" : "Send reminder";
-
-        return (
-          <div key={client.id} className="client-row">
-            <div className="client-name">
-              {client.name}
-              <span className="sub">{client.source}</span>
-            </div>
-            <div>
-              <div>{client.contact_email}</div>
-              <div>{client.contact_whatsapp}</div>
-            </div>
-            <div>{nextReminder}</div>
-            <div>{client.retainer_note}</div>
-            <div>
-              <div>{client.invoiceCount} invoices</div>
-              <div>{client.transactionCount} txns</div>
-              <div>{new Intl.NumberFormat("en-PK", { style: "currency", currency: "PKR", maximumFractionDigits: 0 }).format(Math.round(client.arrears / 100))}</div>
-              <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="btn small"
-                  onClick={() => queueReminder(client.id, client.name)}
-                  disabled={reminderState !== "idle"}
-                >
-                  {actionLabel}
-                </button>
-                {reminderState !== "idle" ? (
-                  <StatusPill value={reminderState === "sent" ? "ok" : "active"} label={reminderState === "sent" ? "Sent" : "Queued"} />
-                ) : null}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </>
+    <div className="client-list">
+      {initialRows.length ? initialRows.map((client) => {
+        const state = states[client.id] ?? "idle";
+        const paid = client.amountDue === 0;
+        const action = paid ? "Settled" : state === "sent" ? "Sent" : state === "scheduled" ? "Scheduled" : client.dueDate && new Date(`${client.dueDate}T00:00:00`) > new Date() ? "Schedule" : "Send reminder";
+        const amount = new Intl.NumberFormat("en-PK", { style: "currency", currency: "PKR", maximumFractionDigits: 0 }).format(Math.round(client.amountDue / 100));
+        return <article className="client-reminder-row" key={client.id}>
+          <div className="client-reminder-name"><strong>{client.name}</strong><span>{client.retainerType}</span></div>
+          <div className="client-reminder-amount"><span>Amount due</span><strong>{amount}</strong></div>
+          <span className={`due-chip${paid ? " paid" : client.dueDate && new Date(`${client.dueDate}T00:00:00`) < new Date() ? " late" : ""}`}>{dueLabel(client.amountDue, client.dueDate)}</span>
+          {client.contactEmail ? <a className="mail-button" href={`mailto:${client.contactEmail}`} aria-label={`Email ${client.name}`}>✉</a> : <span className="mail-button disabled" aria-hidden="true">✉</span>}
+          <button type="button" className={`btn small${paid ? " settled" : state === "idle" ? " solid" : ""}`} disabled={paid || state !== "idle"} onClick={() => updateReminder(client)}>{action}</button>
+        </article>;
+      }) : <p className="empty-ledger">Add a client and an invoice to begin tracking reminders.</p>}
+    </div>
   );
 }
-

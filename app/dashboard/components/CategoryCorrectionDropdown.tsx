@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
@@ -8,22 +8,17 @@ export type CategoryOption = {
   name: string;
 };
 
-export function CategoryCorrectionDropdown({
-  transaction,
-  categories,
-}: {
-  transaction: {
-    id: string;
-    category_id?: string | null;
-    category_name: string;
-    confidence: "high" | "med" | "low" | "learned";
-    status: "ok" | "review";
-    direction: "credit" | "debit";
-    amount: number;
-    description: string;
-  };
-  categories: CategoryOption[];
-}) {
+type CategorizeTransaction = {
+  id: string;
+  category_id?: string | null;
+  category_name: string;
+  confidence: "high" | "med" | "low" | "learned";
+  status: "ok" | "review";
+  direction: "credit" | "debit";
+  description: string;
+};
+
+export function CategoryCorrectionDropdown({ transaction, categories, onCategorized }: { transaction: CategorizeTransaction; categories: CategoryOption[]; onCategorized?: (category: CategoryOption) => void }) {
   const [value, setValue] = useState(transaction.category_name || "Uncategorized");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,40 +34,32 @@ export function CategoryCorrectionDropdown({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: categoryId }),
       });
-
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error((payload as { error?: string }).error ?? "Failed to update category");
       }
-
       const category = categories.find((item) => item.id === categoryId);
-      const nextLabel = category?.name ?? "Uncategorized";
-      setValue(nextLabel);
+      if (!category) throw new Error("Selected category is unavailable.");
+      setValue(category.name);
       setOpen(false);
-      showToast(`Categorized as ${nextLabel}`);
+      onCategorized?.(category);
+      showToast(`Categorized as ${category.name} — Munshi will remember this`);
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : "Failed to update category";
-      setError(message);
+      setError(caughtError instanceof Error ? caughtError.message : "Failed to update category");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div style={{ position: "relative" }}>
+    <div className="category-picker">
       <button type="button" className="cat-pill" onClick={() => setOpen((current) => !current)} disabled={saving} aria-expanded={open}>
-        <span className={`conf-dot ${transaction.confidence}`} aria-hidden="true" />
-        {value}
+        <span className={`conf-dot ${transaction.confidence}`} aria-hidden="true" />{saving ? "Saving…" : value}
       </button>
       <div className={`cat-dropdown${open ? " open" : ""}`}>
-        {categories.map((category) => (
-          <button key={category.id} type="button" disabled={saving} onClick={() => { void updateCategory(category.id); }}>
-            {category.name}
-          </button>
-        ))}
+        {categories.map((category) => <button key={category.id} type="button" disabled={saving} onClick={() => { void updateCategory(category.id); }}>{category.name}</button>)}
         {error ? <div className="form-status error" role="alert">{error}</div> : null}
       </div>
     </div>
   );
 }
-

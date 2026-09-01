@@ -32,8 +32,8 @@ async function createBusiness(db: Awaited<ReturnType<typeof userDb>>, plan: Plan
   const { data: businessId, error } = await db.rpc("create_business", {
     business_name: businessName,
     business_currency: currency || "PKR",
-    business_plan: plan,
-    cycle,
+    business_plan: "khata",
+    cycle: "monthly",
   });
   if (error || !businessId) {
     console.error("create_business failed", { code: error?.code, details: error?.details, hint: error?.hint, message: error?.message, plan, cycle });
