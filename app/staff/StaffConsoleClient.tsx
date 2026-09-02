@@ -1,11 +1,16 @@
 "use client";
 
 import "./staff.css";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { useToast } from "@/components/ui/Toast";
 import { PaymentVerificationQueue } from "./components/PaymentVerificationQueue";
-import { lockStaffConsoleAction, type PaymentVerificationRequest } from "./actions";
+import {
+  lockStaffConsoleAction,
+  sendBroadcastAction,
+  sendExpiryReminderAction,
+  type PaymentVerificationRequest,
+} from "./actions";
 
 type TabKey = "overview" | "subscribers" | "plans" | "coupons" | "broadcast" | "health" | "support" | "flags" | "audit";
 type SubscriberPlan = "KHATA" | "PRO" | "TEAMS";
@@ -21,6 +26,18 @@ type Subscriber = {
   renewal: string;
   txn: string;
   mrr: string;
+};
+
+type SupportTicket = {
+  id?: string;
+  priority: string;
+  name: string;
+  description: string;
+  subject: string;
+  user_email: string;
+  phone?: string;
+  whatsapp?: string;
+  key: string;
 };
 
 const navItems: Array<{ key: TabKey; label: string; icon: string }> = [
@@ -58,9 +75,9 @@ const planDistribution = [
 ];
 
 const expiringPlans = [
-  { name: "Ayesha Rahman", plan: "Munshi Pro", expiry: "Expiring 12 Sep", avatar: "AR" },
-  { name: "Bilal Qureshi", plan: "Teams", expiry: "Expiring 14 Sep", avatar: "BQ" },
-  { name: "Naseem Khan", plan: "Pro", expiry: "Expiring 16 Sep", avatar: "NK" },
+  { businessId: "20000000-0000-0000-0000-000000000001", phone: "03001234567", name: "Ayesha Rahman", plan: "Munshi Pro", expiry: "Expiring 12 Sep", avatar: "AR" },
+  { businessId: "20000000-0000-0000-0000-000000000002", phone: "03007654321", name: "Bilal Qureshi", plan: "Teams", expiry: "Expiring 14 Sep", avatar: "BQ" },
+  { businessId: "20000000-0000-0000-0000-000000000003", phone: "03001112233", name: "Naseem Khan", plan: "Pro", expiry: "Expiring 16 Sep", avatar: "NK" },
 ];
 
 const subscriberRows: Subscriber[] = [
@@ -104,10 +121,10 @@ const healthMetrics = [
   { source: "Bank SMS", percent: 92, tone: "forest", short: "BK" },
 ];
 
-const supportTickets = [
-  { priority: "High", name: "Areeba Waseem", description: "Upwork payout missing from August export", key: "high" },
-  { priority: "Medium", name: "Nadir Ashraf", description: "Need help restoring a cancelled renewal", key: "med" },
-  { priority: "Low", name: "Hina Yousaf", description: "Question about invoice formatting for 2025", key: "low" },
+const supportTickets: SupportTicket[] = [
+  { priority: "High", name: "Areeba Waseem", description: "Upwork payout missing from August export", subject: "Upwork payout missing from August export", user_email: "", key: "high" },
+  { priority: "Medium", name: "Nadir Ashraf", description: "Need help restoring a cancelled renewal", subject: "Need help restoring a cancelled renewal", user_email: "", key: "med" },
+  { priority: "Low", name: "Hina Yousaf", description: "Question about invoice formatting for 2025", subject: "Question about invoice formatting for 2025", user_email: "", key: "low" },
 ];
 
 const initialFlags = {
@@ -125,6 +142,22 @@ const initialAudit = [
   { actor: "Rashid", time: "07:46 PM", detail: "Approved an emergency refund request for 2 users" },
   { actor: "Anna", time: "07:12 PM", detail: "Updated the broadcast audience filters for renewing users" },
 ];
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<string | number | boolean>>) {
+  const escapeCsvValue = (value: string | number | boolean) => {
+    const text = String(value);
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;
+  };
+  const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 function DonutChart({ segments }: { segments: Array<{ label: string; share: number; users: string; color: string }> }) {
   const radius = 58;
@@ -181,14 +214,25 @@ export function StaffConsoleClient({
   const [broadcastAudience, setBroadcastAudience] = useState("All users");
   const [announcement, setAnnouncement] = useState("");
   const [coupons, setCoupons] = useState(initialCoupons);
-  const [newCoupon, setNewCoupon] = useState({ code: "", discount: "", expiry: "2026-09-30" });
+  const [newCoupon, setNewCoupon] = useState({ code: "", discount: "", maxUses: "250", expiry: "2026-09-30" });
   const [flags, setFlags] = useState(initialFlags);
   const [auditLogs, setAuditLogs] = useState(initialAudit);
-  const [supportRows, setSupportRows] = useState(supportTickets);
+  const [supportRows, setSupportRows] = useState<SupportTicket[]>(supportTickets);
+  const [replyingToTicketId, setReplyingToTicketId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
   const [paymentRequests, setPaymentRequests] = useState<PaymentVerificationRequest[]>([]);
   const [paymentRequestsLoaded, setPaymentRequestsLoaded] = useState(false);
   const [paymentRequestsError, setPaymentRequestsError] = useState("");
   const toast = useToast();
+  const uniqueSupportRows = useMemo(() => {
+    const seen = new Set<string>();
+    return supportRows.filter((ticket) => {
+      const identifier = ticket.id || `${ticket.name}-${ticket.user_email}-${ticket.subject}`;
+      if (seen.has(identifier)) return false;
+      seen.add(identifier);
+      return true;
+    });
+  }, [supportRows]);
 
   useEffect(() => {
     const loadStaffData = async () => {
@@ -224,6 +268,13 @@ export function StaffConsoleClient({
     return () => { cancelled = true; };
   }, [activeTab, paymentRequestsLoaded]);
 
+  useEffect(() => {
+    if (activeTab !== "audit") return;
+
+    void import("./actions").then((mod) => mod.fetchAuditLogs()).then(setAuditLogs)
+      .catch(() => toast("Unable to load the latest audit log."));
+  }, [activeTab, toast]);
+
   const filteredSubscribers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return subscriberRows.filter((row) => {
@@ -248,17 +299,68 @@ export function StaffConsoleClient({
       return;
     }
 
-    const result = await import("./actions").then((mod) => mod.createCouponAction({ code, discount: newCoupon.discount, expiresAt: newCoupon.expiry }));
+    const maxUses = Number(newCoupon.maxUses || 250);
+    const result = await import("./actions").then((mod) => mod.createCouponAction({ code, discount: newCoupon.discount, maxUses, expiresAt: newCoupon.expiry }));
     if (result.ok) {
       const createdCode = result.code ?? code.toUpperCase();
       const createdDiscount = result.discount ?? newCoupon.discount;
-      setCoupons((current) => [{ code: createdCode, discount: createdDiscount, redemptions: "0 / 250", expiry: newCoupon.expiry }, ...current]);
-      setNewCoupon({ code: "", discount: "", expiry: "2026-09-30" });
+      setCoupons((current) => [{ code: createdCode, discount: createdDiscount, redemptions: `0 / ${maxUses}`, expiry: newCoupon.expiry }, ...current]);
+      setNewCoupon({ code: "", discount: "", maxUses: "250", expiry: "2026-09-30" });
+      void import("./actions").then((mod) => mod.fetchAuditLogs()).then(setAuditLogs)
+        .catch(() => toast("Coupon created, but the audit log could not be refreshed."));
       toast(result.message || "Coupon created");
       return;
     }
 
     toast(result.message || "Code and discount are required.");
+  };
+
+  const exportSubscribers = () => {
+    downloadCsv(
+      "subscribers.csv",
+      ["Name", "Email", "Plan", "Status", "Renewal", "Txns/mo", "MRR"],
+      filteredSubscribers.map((row) => [row.name, row.email, row.plan, row.status, row.renewal, row.txn, row.mrr]),
+    );
+    toast("Subscribers list exported as CSV.");
+  };
+
+  const exportActiveTab = () => {
+    if (activeTab === "subscribers") {
+      exportSubscribers();
+      return;
+    }
+
+    if (activeTab === "overview") {
+      downloadCsv(
+        "overview.csv",
+        ["Metric", "Value", "Details"],
+        overviewKpis.map((kpi) => [kpi.label, kpi.value, kpi.delta]),
+      );
+    } else if (activeTab === "plans") {
+      downloadCsv(
+        "plans.csv",
+        ["Plan", "Price", "Active users", "Revenue", "Avg txn volume"],
+        [
+          ["Khata (Free)", "Free", "3,476", "$0", "1.2k / mo"],
+          ["Munshi Pro", "$10/mo", "612", "$6,120", "4.8k / mo"],
+          ["Munshi Teams", "$30/mo", "130", "$3,900", "11.4k / mo"],
+        ],
+      );
+    } else if (activeTab === "coupons") {
+      downloadCsv("coupons.csv", ["Code", "Discount", "Redemptions", "Expires"], coupons.map((coupon) => [
+        coupon.code,
+        coupon.discount,
+        coupon.redemptions,
+        coupon.expiry,
+      ]));
+    } else if (activeTab === "flags") {
+      downloadCsv("feature-flags.csv", ["Key", "Enabled"], Object.entries(flags).map(([key, enabled]) => [key, enabled]));
+    } else if (activeTab === "audit") {
+      downloadCsv("audit.csv", ["Actor", "Time", "Detail"], auditLogs.map((log) => [log.actor, log.time, log.detail]));
+    } else {
+      downloadCsv("staff-console.csv", ["Tab", "Status"], [[activeTab, "No exportable rows"]]);
+    }
+    toast(`${activeTab.charAt(0).toUpperCase()}${activeTab.slice(1)} data exported as CSV.`);
   };
 
   const renderTabContent = () => {
@@ -341,7 +443,19 @@ export function StaffConsoleClient({
                     className="btn small ghost"
                     type="button"
                     onClick={() => {
-                      toast(`Reminder sent to ${row.name} (demo).`);
+                      void sendExpiryReminderAction({
+                        businessId: row.businessId || "",
+                        phone: row.phone || "03001234567",
+                        customerName: row.name,
+                        planName: row.plan || "Munshi Pro",
+                      }).then((res) => {
+                        if (res?.waLink) {
+                          window.open(res.waLink, "_blank");
+                          toast(`WhatsApp reminder opened for ${row.name}`);
+                          return;
+                        }
+                        toast(res.message || `Unable to send reminder to ${row.name}.`);
+                      }).catch(() => toast(`Unable to send reminder to ${row.name}.`));
                     }}
                   >
                     Send reminder
@@ -380,7 +494,7 @@ export function StaffConsoleClient({
                   </button>
                 ))}
               </div>
-              <button type="button" className="btn" onClick={() => toast("Subscribers list exported as CSV (demo).")}>Export CSV</button>
+              <button type="button" className="btn" onClick={exportSubscribers}>Export CSV</button>
             </div>
             <table>
               <thead>
@@ -524,7 +638,7 @@ export function StaffConsoleClient({
                       <td><span className="coupon-badge">{coupon.code}</span></td>
                       <td>{coupon.discount}</td>
                       <td>{coupon.redemptions}</td>
-                      <td>{coupon.expiry}</td>
+                      <td>{coupon.expiry ? coupon.expiry.split("T")[0] : ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -543,6 +657,10 @@ export function StaffConsoleClient({
               <div className="form-field">
                 <label>Discount</label>
                 <input value={newCoupon.discount} onChange={(event) => setNewCoupon({ ...newCoupon, discount: event.target.value })} placeholder="20% off Pro" />
+              </div>
+              <div className="form-field">
+                <label>MAX USES</label>
+                <input type="number" min="1" value={newCoupon.maxUses} onChange={(event) => setNewCoupon({ ...newCoupon, maxUses: event.target.value })} placeholder="250" />
               </div>
               <div className="form-field">
                 <label>Expiration</label>
@@ -586,11 +704,13 @@ export function StaffConsoleClient({
                   return;
                 }
 
-                const result = await import("./actions").then((mod) => mod.sendBroadcastAction(broadcastAudience, announcement));
-                toast(result.message || "Announcement sent to selected audience");
+                const result = await sendBroadcastAction({ audience: broadcastAudience, message: announcement });
                 if (result.ok) {
                   setAnnouncement("");
+                  toast(result.message || "Announcement sent to selected audience");
+                  return;
                 }
+                toast(result.message || "Unable to send announcement.");
               }}
             >
               Send announcement
@@ -656,19 +776,67 @@ export function StaffConsoleClient({
           <section className="panel support-panel">
             <div className="panel-head">
               <h3>Open support tickets</h3>
-              <span className="sub">14 open</span>
+              <span className="sub">{supportRows.length} OPEN</span>
             </div>
             <div className="support-list">
-              {supportRows.map((ticket) => (
-                <div key={ticket.name} className="ticket-row">
-                  <span className={`tk-badge ${ticket.key}`}>{ticket.priority}</span>
-                  <div className="exp-info">
-                    <div className="n">{ticket.name}</div>
-                    <div className="s">{ticket.description}</div>
-                  </div>
-                  <button className="btn small ghost" type="button" onClick={() => toast("Reply composer opens here (demo).")}>Reply</button>
-                </div>
-              ))}
+              {uniqueSupportRows.map((ticket, idx) => {
+                const ticketId = ticket.id || `${ticket.name}-${idx}`;
+                return (
+                  <Fragment key={ticketId}>
+                    <div className="ticket-row">
+                      <span className={`tk-badge ${ticket.key}`}>{ticket.priority}</span>
+                      <div className="exp-info">
+                        <div className="n">{ticket.name}</div>
+                        <div className="s">{ticket.description}</div>
+                      </div>
+                      <button
+                        className="btn small ghost"
+                        type="button"
+                        onClick={() => {
+                          setReplyingToTicketId(ticketId);
+                          setReplyText("");
+                        }}
+                      >
+                        Reply
+                      </button>
+                    </div>
+                    {replyingToTicketId === ticketId ? (
+                      <div className="form-field">
+                        <textarea
+                          rows={4}
+                          value={replyText}
+                          onChange={(event) => setReplyText(event.target.value)}
+                          placeholder={`Write your response to ${ticket.name}...`}
+                        />
+                        <div className="chip-group">
+                          <button
+                            className="btn small"
+                            type="button"
+                            onClick={() => {
+                              const phone = (ticket.phone || ticket.whatsapp || "923001234567").replace(/\D/g, "");
+                              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(`Assalam-o-alaikum ${ticket.name}, regarding your ticket "${ticket.subject}": ` + replyText)}`, "_blank");
+                              setReplyingToTicketId(null);
+                              setReplyText("");
+                            }}
+                          >
+                            Send via WhatsApp
+                          </button>
+                          <button
+                            className="btn small ghost"
+                            type="button"
+                            onClick={() => {
+                              setReplyingToTicketId(null);
+                              setReplyText("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -704,6 +872,10 @@ export function StaffConsoleClient({
                       setFlags((current) => ({ ...current, [key]: checked }));
                       const result = await import("./actions").then((mod) => mod.toggleFeatureFlagAction(key, checked));
                       toast(result.message || `${label} ${checked ? "enabled" : "disabled"}.`);
+                      if (result.ok) {
+                        void import("./actions").then((mod) => mod.fetchAuditLogs()).then(setAuditLogs)
+                          .catch(() => toast("Feature flag updated, but the audit log could not be refreshed."));
+                      }
                     }}
                   />
                 </div>
@@ -778,7 +950,7 @@ export function StaffConsoleClient({
                 <h1>● Live data • updated just now</h1>
                 <div className="top-right">
                   <div className="live-pill"><i /> Live</div>
-                  <button type="button" className="btn ghost small" onClick={() => toast("Exporting CSV (demo)...")}>
+                  <button type="button" className="btn ghost small" onClick={exportActiveTab}>
                     Export CSV
                   </button>
                 </div>

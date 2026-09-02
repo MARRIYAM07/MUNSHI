@@ -1,3 +1,4 @@
+-- 1. Staff users role adjustments
 alter table public.staff_users add column if not exists role text;
 update public.staff_users set role = 'superadmin' where role is null;
 alter table public.staff_users alter column role set default 'superadmin';
@@ -12,9 +13,16 @@ $$;
 revoke all on function public.is_superadmin(uuid) from public;
 grant execute on function public.is_superadmin(uuid) to authenticated;
 
-create type public.payment_verification_status as enum ('pending', 'approved', 'rejected');
+-- 2. Safe enum type creation (fixes 42710 error)
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'payment_verification_status') then
+    create type public.payment_verification_status as enum ('pending', 'approved', 'rejected');
+  end if;
+end $$;
 
-create table public.payment_verification_requests (
+-- 3. Payment verification requests table
+create table if not exists public.payment_verification_requests (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
   requested_by uuid not null references auth.users(id) on delete cascade,
@@ -37,19 +45,23 @@ create table public.payment_verification_requests (
   check ((status = 'pending' and reviewed_at is null and reviewed_by is null and rejection_reason is null) or (status = 'approved' and reviewed_at is not null and reviewed_by is not null and rejection_reason is null) or (status = 'rejected' and reviewed_at is not null and reviewed_by is not null and rejection_reason is not null))
 );
 
-create unique index payment_verification_one_pending_per_business on public.payment_verification_requests(business_id) where status = 'pending';
-create index payment_verification_queue_idx on public.payment_verification_requests(status, submitted_at desc);
+create unique index if not exists payment_verification_one_pending_per_business on public.payment_verification_requests(business_id) where status = 'pending';
+create index if not exists payment_verification_queue_idx on public.payment_verification_requests(status, submitted_at desc);
 
 alter table public.payment_verification_requests enable row level security;
 
+drop policy if exists payment_verification_superadmin_read on public.payment_verification_requests;
 create policy payment_verification_superadmin_read on public.payment_verification_requests for select to authenticated using (public.is_superadmin());
 
+-- 4. Storage Bucket
 insert into storage.buckets (id, name, public)
 values ('payment-receipts', 'payment-receipts', false)
 on conflict (id) do update set public = false;
 
+drop policy if exists payment_receipts_service_role_only on storage.objects;
 create policy payment_receipts_service_role_only on storage.objects for all to service_role using (bucket_id = 'payment-receipts') with check (bucket_id = 'payment-receipts');
 
+-- 5. Verification status function
 create or replace function public.get_payment_verification_status(bid uuid)
 returns table(status public.payment_verification_status, requested_plan public.plan_type, transaction_reference text, submitted_at timestamptz)
 language plpgsql stable security definer set search_path=public as $$
@@ -70,6 +82,7 @@ $$;
 revoke all on function public.get_payment_verification_status(uuid) from public;
 grant execute on function public.get_payment_verification_status(uuid) to authenticated;
 
+-- 6. Protect billing fields triggers
 create or replace function public.protect_billing_fields() returns trigger language plpgsql set search_path=public as $$
 begin
   if (old.plan is distinct from new.plan or old.billing_cycle is distinct from new.billing_cycle)
@@ -80,8 +93,10 @@ begin
 end;
 $$;
 
+drop trigger if exists protect_business_billing_fields on public.businesses;
 create trigger protect_business_billing_fields before update on public.businesses for each row execute function public.protect_billing_fields();
 
+-- 7. Protect subscription state triggers
 create or replace function public.protect_subscription_state() returns trigger language plpgsql set search_path=public as $$
 begin
   if coalesce(current_setting('app.payment_verification_resolution', true), '') <> 'active' then
@@ -91,12 +106,17 @@ begin
 end;
 $$;
 
+drop trigger if exists protect_subscription_state_insert on public.subscriptions;
 create trigger protect_subscription_state_insert before insert on public.subscriptions for each row execute function public.protect_subscription_state();
+
+drop trigger if exists protect_subscription_state_update on public.subscriptions;
 create trigger protect_subscription_state_update before update on public.subscriptions for each row execute function public.protect_subscription_state();
 
 drop policy if exists subscriptions_member_all on public.subscriptions;
+drop policy if exists subscriptions_member_read on public.subscriptions;
 create policy subscriptions_member_read on public.subscriptions for select to authenticated using (public.is_active_member(business_id));
 
+-- 8. Khata limit trigger
 create or replace function public.enforce_khata_transaction_limit() returns trigger language plpgsql security definer set search_path=public as $$
 declare
   active_plan public.plan_type;
@@ -118,8 +138,10 @@ begin
 end;
 $$;
 
+drop trigger if exists enforce_khata_transaction_limit on public.transactions;
 create trigger enforce_khata_transaction_limit before insert on public.transactions for each row execute function public.enforce_khata_transaction_limit();
 
+-- 9. Create business function
 create or replace function public.create_business(business_name text, business_currency text default 'PKR', business_plan public.plan_type default 'khata', cycle public.billing_cycle_type default 'monthly') returns uuid language plpgsql security definer set search_path=public as $$
 declare
   bid uuid;
@@ -139,6 +161,7 @@ begin
 end;
 $$;
 
+-- 10. Resolve payment verification request function
 create or replace function public.resolve_payment_verification_request(request_id uuid, decision text, rejection_reason_input text default null)
 returns public.payment_verification_status
 language plpgsql security definer set search_path=public as $$
