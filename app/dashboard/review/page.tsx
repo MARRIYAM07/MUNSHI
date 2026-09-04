@@ -1,5 +1,5 @@
 import { DashboardFrame } from "@/app/dashboard/DashboardFrame";
-import { ReviewQueueClient } from "./ReviewQueueClient";
+import ReviewQueueClient from "./ReviewQueueClient";
 import { formatMoney, resolveDashboardBusiness } from "@/lib/dashboard";
 import { requireMember } from "@/lib/supabase";
 
